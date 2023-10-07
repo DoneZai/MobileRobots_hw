@@ -72,6 +72,39 @@ std::size_t Controller::get_nearest_path_pose_index(int start_index,
   return nearest_index;
 }
 
+
+// 获取目标点
+int get_pure_pursuit_target_index(double robot_x, double robot_y, const nav_msgs::Path& path, double l_d) {
+    int closest_index = 0;
+    double closest_distance = std::numeric_limits<double>::max();
+
+    for (int i = 0; i < path.poses.size(); ++i) {
+        const auto& pose = path.poses[i].pose;
+        double dx = pose.position.x - robot_x;
+        double dy = pose.position.y - robot_y;
+        double distance = std::sqrt(dx * dx + dy * dy);
+        if (distance < closest_distance) {
+            closest_distance = distance;
+            closest_index = i;
+        }
+    }
+  
+    int target_index = closest_index;
+    double delta_l =sqrt(pow(path.poses[target_index].pose.position.x - robot_x,2)+pow(path.poses[target_index].pose.position.y - robot_y,2));
+
+    while (l_d > delta_l && target_index < path.poses.size() - 1) {
+        const auto& next_pose = path.poses[target_index + 1].pose;
+        double dx = next_pose.position.x - robot_x;
+        double dy = next_pose.position.y - robot_y;
+        delta_l = std::sqrt(dx * dx + dy * dy);
+        target_index += 1;
+    }
+
+    return target_index;
+}
+
+
+
 void Controller::on_timer(const ros::TimerEvent& event)
 {
   if (std::abs(current_linear_velocity) < 0.01) {
@@ -79,39 +112,67 @@ void Controller::on_timer(const ros::TimerEvent& event)
   }
   update_robot_pose((ros::Time::now() - robot_time).toSec() );
 
-  nearest_point_index = get_nearest_path_pose_index(nearest_point_index - 10, 20);
+  // nearest_point_index = get_nearest_path_pose_index(nearest_point_index - 10, 20);
 
-  const auto& nearest_pose = path.poses[nearest_point_index].pose;
-  const auto& nearest_pose_angle = tf::getYaw(nearest_pose.orientation);
-  double dx = robot_x - nearest_pose.position.x;
-  double dy = robot_y - nearest_pose.position.y;
+  // const auto& nearest_pose = path.poses[nearest_point_index].pose;
+  // const auto& nearest_pose_angle = tf::getYaw(nearest_pose.orientation);
+  // double dx = robot_x - nearest_pose.position.x;
+  // double dy = robot_y - nearest_pose.position.y;
+  // 这部分是原代码
   // error is negative difference by y axe in the axis of the nereset pose
-  double error = -(-dx * sin(nearest_pose_angle) + dy * cos(nearest_pose_angle));
-  double diff_err = error - last_error;
-  last_error = error;
-  if ( fabs(error) < max_antiwindup_error )
-    error_integral += error;
-  else
-    error_integral = 0.0;
+  // double error = -(-dx * sin(nearest_pose_angle) + dy * cos(nearest_pose_angle));
+  // double diff_err = error - last_error;
+  // last_error = error;
+  // if ( fabs(error) < max_antiwindup_error )
+  //   error_integral += error;
+  // else
+  //   error_integral = 0.0;
 
-  //Desired angular velocity
-  double angular_cmd =  p_factor * error
-                      + d_factor * diff_err
-                      + i_factor * error_integral;
-  //curvature for calculated angular velocity and for current linear velocity
-  double curvature = angular_cmd / current_linear_velocity;
+  // //Desired angular velocity
+  // double angular_cmd =  p_factor * error
+  //                     + d_factor * diff_err
+  //                     + i_factor * error_integral;
+  // //curvature for calculated angular velocity and for current linear velocity
+  // double curvature = angular_cmd / current_linear_velocity;
 
-  //send curvature as command to drives
+  // // // send curvature as command to drives
+  // std_msgs::Float32 cmd;
+  // cmd.data = clip<double>(curvature, max_curvature);
+  // steer_pub.publish(cmd);
+  
+  // pure pursuit
+  double lam = 0.25; //coefficient
+  double c=5; // coefficient
+  double lookahead_distance = lam*current_linear_velocity+c; // set a lookahead distance
+  int target_index = get_pure_pursuit_target_index(robot_x, robot_y, path, lookahead_distance);
+
+  // 获取目标路径点的位置
+  double target_x = path.poses[target_index].pose.position.x;
+  double target_y = path.poses[target_index].pose.position.y;
+
+  // calculate distance and angle between target and position car
+  double dx = target_x - robot_x;
+  double dy = target_y - robot_y;
+
+  double distance_to_target = std::sqrt(dx*dx + dy*dy);
+  double angle_to_target = std::atan2(dy, dx);
+
+  // calculat steering angle
+
+  double L = 1.8; 
+  double alpha = angle_to_target-robot_theta; 
+  double delta = atan2(2 * L * sin(alpha), lookahead_distance);
+
   std_msgs::Float32 cmd;
-  cmd.data = clip<double>(curvature, max_curvature);
+  cmd.data = clip<double>(delta, max_curvature);
   steer_pub.publish(cmd);
-
   //send trajectory for velocity controller
   publish_trajectory();
 
   //send error for debug proposes
-  publish_error(error);
-  ROS_DEBUG_STREAM("steering cmd = "<<curvature);
+  // publish_error(error);
+  // ROS_DEBUG_STREAM("steering cmd = "<<curvature);
+  ROS_DEBUG_STREAM("steering cmd = "<<delta);
 }
 
 void Controller::on_pose(const nav_msgs::OdometryConstPtr& odom)
