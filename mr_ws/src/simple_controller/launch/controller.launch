@@ -22,7 +22,7 @@
     <node name="rqt" pkg="simple_controller" type="start_rqt" args="--perspective-file $(find simple_controller)/cfg/steer_error.perspective" output="screen">
     </node>
     <!-- start gzclient via script -->
-    <node name="gzclient" pkg="simple_controller" type="start_gzclient" output="screen">
-    </node>
+    <!-- <node name="gzclient" pkg="simple_controller" type="start_gzclient" output="screen">
+    </node> -->
 
 </launch>

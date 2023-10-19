@@ -1,0 +1,8 @@
+prefix=/home/jinlong/local/workspace/mr_ws/devel
+
+Name: simple_controller
+Description: Description of simple_controller
+Version: 0.0.0
+Cflags: -I/home/jinlong/local/workspace/mr_ws/devel/include -I/home/jinlong/local/workspace/mr_ws/src/simple_controller/include
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,8 @@
+prefix=/home/jinlong/local/workspace/mr_ws/install
+
+Name: vehicle_ros_plugin
+Description: Description of vehicle_ros_plugin
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: roscpp gazebo_ros

@@ -1,5 +1,5 @@
 <launch>
-<arg name="rqt_persp" default="$(find velocity_controller)/launch/vel_error.perspective"/>
+<arg name="rqt_persp" default="$(find velocity_controller)/launch/vel_error1.perspective"/>
 
 <node pkg="velocity_controller" name="throttle_controller" type="velocity_controller" output="screen">
     <remap from="/throttle_controller/odom" to="/robot/odom"/>

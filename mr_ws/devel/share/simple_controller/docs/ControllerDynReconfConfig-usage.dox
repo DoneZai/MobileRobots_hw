@@ -1,0 +1,9 @@
+\subsubsection usage Usage
+\verbatim
+<node name="controller_node" pkg="simple_controller" type="controller_node">
+  <param name="proportional" type="double" value="0.1" />
+  <param name="differential" type="double" value="0.0" />
+  <param name="integral" type="double" value="0.0" />
+</node>
+\endverbatim
+

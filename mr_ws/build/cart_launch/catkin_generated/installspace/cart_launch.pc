@@ -1,0 +1,8 @@
+prefix=/home/jinlong/local/workspace/mr_ws/install
+
+Name: cart_launch
+Description: Description of cart_launch
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

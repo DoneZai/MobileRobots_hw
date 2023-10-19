@@ -1,0 +1,8 @@
+prefix=/home/jinlong/local/workspace/mr_ws/devel
+
+Name: barrel_slam
+Description: Description of barrel_slam
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

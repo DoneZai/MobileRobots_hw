@@ -1,0 +1,2 @@
+barrel_slam:cart_launch:feature_matcher:mpc_controller:odo2tf:polaris_ranger_ev:simple_controller:simple_map:simple_planner:stage_controller:vehicle_ros_plugin:velocity_controller
+-DCATKIN_DEVEL_PREFIX=/home/jinlong/local/workspace/mr_ws/devel -DCMAKE_INSTALL_PREFIX=/home/jinlong/local/workspace/mr_ws/install -G Unix Makefiles

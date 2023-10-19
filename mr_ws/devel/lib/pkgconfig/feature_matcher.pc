@@ -1,0 +1,8 @@
+prefix=/home/jinlong/local/workspace/mr_ws/devel
+
+Name: feature_matcher
+Description: Description of feature_matcher
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

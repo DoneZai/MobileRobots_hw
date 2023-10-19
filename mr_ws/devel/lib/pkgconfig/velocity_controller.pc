@@ -1,0 +1,8 @@
+prefix=/home/jinlong/local/workspace/mr_ws/devel
+
+Name: velocity_controller
+Description: Description of velocity_controller
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
