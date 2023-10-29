@@ -6,7 +6,7 @@
     </include>
     <!-- start mpc controller -->
     <node name="controller" pkg="mpc_controller" type="mpc_controller" output="screen">
-    	<rosparam command="load" file="$(find mpc_controller)/launch/controller.yaml" ns="mpc_controller" />
+    	<rosparam command="load" file="$(find mpc_controller)/launch/controller1.yaml" ns="mpc_controller" />
     	<remap from="/controller/mpc_controller/ground_truth" to="/robot/base_pose_ground_truth"/>
     	<remap from="/controller/mpc_controller/odom" to="/robot/odom"/>
     	<remap from="steering" to="/robot/steering"/>

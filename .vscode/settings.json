@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.tcc": "cpp",
+        "cmath": "cpp",
+        "functional": "cpp",
+        "random": "cpp",
+        "regex": "cpp",
+        "type_traits": "cpp",
+        "orderingmethods": "cpp",
+        "eigen2support": "cpp"
+    }
+}

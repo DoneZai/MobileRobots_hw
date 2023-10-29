@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/jinlong/ubuntu_demo/mb_hw2/MobileRobots_hw/mr_ws/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/jinlong/ubuntu_demo/yazan_mb/mr_ws/src/mpc_controller/include/**",
+        "/home/jinlong/ubuntu_demo/yazan_mb/mr_ws/src/simple_controller/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
