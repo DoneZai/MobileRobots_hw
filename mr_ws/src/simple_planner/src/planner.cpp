@@ -48,6 +48,7 @@ void Planner::on_target(const geometry_msgs::PoseStamped& pose)
   calculate_path();
 
   if (!path_msg_.points.empty()) {
+    bezier_smooth(path_msg_);
     path_msg_.header.stamp = ros::Time::now();
     path_msg_.header.frame_id = pose.header.frame_id;
     path_publisher_.publish(path_msg_);
@@ -277,6 +278,7 @@ void Planner::wave_search(){
       path_msg_.points.push_back(p);
   		ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
   	}
+    // size_t num_points = path_msg_.points.size();
   }
   ROS_INFO_STREAM("Wave path has been searched " );
 
@@ -401,11 +403,125 @@ void Planner::calculate_path()
       path_msg_.points.push_back(p);
   		// ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
   	}
-  }
 
+  }
+    ROS_INFO_STREAM("Number of points: "<<path_msg_.points.size());
     ROS_INFO_STREAM("A* path has been searched" );
   }
 
 }
 
+// 计算组合数
+int Planner::binomial(int n, int i) {
+    int res = 1;
+    for (int j = 1; j <= i; ++j) {
+        res *= (n - j + 1) / static_cast<double>(j);
+    }
+    return res;
+}
+
+
+// int factorial(int n) {
+//     return (n == 0 || n == 1) ? 1 : n * factorial(n - 1);
+// }
+
+// int comb(int n, int k) {
+//     return factorial(n) / (factorial(k) * factorial(n - k));
+// }
+
+// std::pair<double, double> get_bezier_curve(const std::vector<std::pair<double, double>>& points) {
+//     int n = points.size() - 1;
+
+//     return [=](double t) {
+//         double x = 0.0;
+//         double y = 0.0;
+
+//         for (int i = 0; i <= n; ++i) {
+//             double coeff = comb(n, i) * std::pow(t, i) * std::pow(1 - t, n - i);
+//             x += coeff * points[i].first;
+//             y += coeff * points[i].second;
+//         }
+
+//         return std::make_pair(x, y);
+//     };
+// }
+
+
+// std::pair<std::vector<double>, std::vector<double>> evaluate_bezier(const std::vector<std::pair<double, double>>& points, int total) {
+//     auto bezier = get_bezier_curve(points);
+//     std::vector<double> new_x, new_y;
+
+//     for (int i = 0; i < total; ++i) {
+//         double t = static_cast<double>(i) / (total - 1);
+//         auto result = bezier(t);
+//         new_x.push_back(result.first);
+//         new_y.push_back(result.second);
+//     }
+
+//     return std::make_pair(new_x, new_y);
+// }
+
+
+// 计算n次贝塞尔曲线上的点
+geometry_msgs::Point32 Planner::bezier_curve(const std::vector<geometry_msgs::Point32>& vector_before, float t) {
+    // int n = vector_before.size() - 1;
+    int n = vector_before.size() - 1;
+    geometry_msgs::Point32 res;
+    for (int i = 0; i <= n; ++i) {
+        float b = binomial(n, i) * pow(t, i) * pow(1 - t, n - i);
+        res.x = res.x + vector_before[i].x * b;
+        res.y = res.y + vector_before[i].y * b;
+    }
+    return res;
+}
+
+void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
+    std::vector<geometry_msgs::Point32> vector_before_all;
+    vector_before_all = before_smooth.points;
+    ROS_INFO_STREAM("Number of points: " << path_msg_.points.size());
+    temp_path_msg_.points.clear();
+    size_t group_size = 40; // 每组的点的数量
+    float step = 0.02;     // 步长
+    // float step = 1.0 / (group_size - 1);
+    // 获取 before_smooth 中的点数
+    size_t total_points = vector_before_all.size();
+
+    // 循环处理每组点
+    for (size_t start_index = 0; start_index < total_points; start_index += group_size) {
+        // 构建当前组的 vector_before
+        std::vector<geometry_msgs::Point32> vector_before;
+        for (size_t i = start_index; i < std::min(start_index + group_size, total_points); ++i) {
+            vector_before.push_back(vector_before_all[i]);
+            ROS_INFO_STREAM("i =  " << i);
+            }
+            // if(start_index!=0)start_index-=10;
+            ROS_INFO_STREAM("Number of points: " << vector_before.size());
+            // 对当前组进行贝塞尔平滑
+            for (float t = 0; t <= 1; t += step) {
+              geometry_msgs::Point32 p = bezier_curve(vector_before, t);
+              temp_path_msg_.points.push_back(p);
+        }
+            vector_before.clear();
+
+    }
+            path_msg_ = temp_path_msg_;
+            // ROS_INFO_STREAM("Number of points: " << temp_path_msg_.points.size() << "  step = " << step);
+}
+
+// void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
+//     std::vector<geometry_msgs::Point32> vector_before;
+
+//     vector_before = before_smooth.points; // 贝塞尔曲线控制点，给定控制点的数量决定贝塞尔曲线的阶数  
+//     path_msg_.points.clear();
+//     // cout << "size:" << points.size() << endl;
+//     float step = 0.001; // 步长
+//     for (float t = 0; t <= 1; t += step) {
+//     // for (int t = 0; t <= vector_before.size(); t++) {
+//         geometry_msgs::Point32 p = bezier_curve(vector_before, t);
+//         path_msg_.points.push_back(p);
+//         ROS_INFO_STREAM("Number of points: "<<path_msg_.points.size()<<"  step = "<< step);
+//     }
+// }
+
 } /* namespace simple_planner */
+

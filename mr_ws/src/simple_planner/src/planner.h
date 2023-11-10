@@ -53,6 +53,9 @@ private:
   void calculate_path();
   // Wavefront Algorithm 
   void wave_search();
+  int binomial(int n, int i) ;
+  geometry_msgs::Point32  bezier_curve(const std::vector<geometry_msgs::Point32>& points, float t);
+  void bezier_smooth(sensor_msgs::PointCloud before_smooth);
   double heruistic(int i, int j);
 
   // функции для работы с картами и индексами
@@ -92,6 +95,7 @@ private:
   geometry_msgs::Pose target_pose_;
 
   sensor_msgs::PointCloud path_msg_;
+  sensor_msgs::PointCloud temp_path_msg_;
 
   double robot_radius_ = nh_.param("robot_radius", 0.5);
 
