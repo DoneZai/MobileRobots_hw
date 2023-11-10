@@ -16,10 +16,6 @@ acado/acado_optimal_control.hpp
 ros/ros.h
 -
 
-/home/jinlong/local/workspace/mr_ws/src/mpc_controller/test/mpc_test.cpp
-mpc.h
-/home/jinlong/local/workspace/mr_ws/src/mpc_controller/test/mpc.h
-
 /opt/ros/noetic/include/ros/advertise_options.h
 ros/forwards.h
 /opt/ros/noetic/include/ros/ros/forwards.h

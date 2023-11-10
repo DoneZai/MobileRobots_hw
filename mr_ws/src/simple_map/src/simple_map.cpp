@@ -64,7 +64,28 @@ bool determineScanTransform(tf::StampedTransform& scanTransform,
     }
     return true;
 }
-
+//Логарифм отношения шансов
+float log2p(float p)
+{
+    return log(p/(1-p));
+}
+//Вычисление вероятности
+float calc_p(float l)
+{
+    return 1 - (1/(1+exp(l)));
+}
+/*
+В нашей задаче мы добавляем переменную p, которая отвечает за вероятность точки.
+*/
+int get_map(float l)
+{
+    float p = calc_p(l);
+if (p < 0.4) { 
+        return 0;
+    }
+else if (p > 0.6) { return 100; }
+else return 50;
+}
 
 /**
  * Функция, которая будет вызвана
@@ -93,7 +114,41 @@ void laserCallback(const sensor_msgs::LaserScan& scan)
     ROS_INFO_STREAM("publish map "<<x<<" "<<y);
     // в клетку карты записываем значение 100
     map_msg.data[ y* map_width + x] = 0;
-
+int size_ranges = scan.ranges.size();
+    ROS_INFO_STREAM("Publish map"<<size_ranges);
+    float curr_angle = scan.angle_min;
+    float delta_angle = scan.angle_increment;
+    int i=0;
+    while(curr_angle < scan.angle_max)
+    {
+        float range = scan.ranges[i];
+        if(range>scan.range_min && range < scan.range_max )
+        {
+            float h = scan.range_min;
+            while(h<=range)
+            {
+                tf::Vector3 h_pose(h*cos(curr_angle), h*sin(curr_angle),0);
+                tf::Vector3 h_map = scanTransform(h_pose);
+                int h_y = (h_map.y() - map_msg.info.origin.position.y )/map_resolution;
+                int h_x = (h_map.x() - map_msg.info.origin.position.x )/map_resolution;
+                float p = 0.5;
+                if (abs(range - h) < 0.1) {
+                    p = 1.0;
+                    }
+                    else if (range - h > 0.1) {
+                    p = 0.0;
+                    }
+                    float log_prev = log2p(float(map_msg.data[ h_y* map_width +h_x])/100);
+                    float log_free = log2p(0.5);
+                    float log_inv = log2p(p);
+                    float log_ti = log_inv + log_prev - log_free;
+                    map_msg.data[ h_y* map_width + h_x] = get_map(log_ti);
+                    h += 0.01;
+                }
+            }
+        i++;
+        curr_angle += delta_angle;
+    }
     // публикуем сообщение с построенной картой
     mapPub.publish(map_msg);
 }

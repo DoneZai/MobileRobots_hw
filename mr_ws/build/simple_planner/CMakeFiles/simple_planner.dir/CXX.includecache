@@ -36,12 +36,6 @@ sensor_msgs/PointCloud.h
 limits
 -
 
-/home/jinlong/local/workspace/mr_ws/src/simple_planner/src/simple_planner.cpp
-ros/ros.h
--
-planner.h
-/home/jinlong/local/workspace/mr_ws/src/simple_planner/src/planner.h
-
 /opt/ros/noetic/include/geometry_msgs/Point.h
 string
 -

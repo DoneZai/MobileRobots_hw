@@ -50,7 +50,8 @@ private:
   void increase_obstacles(std::size_t cells);
   // функция вычисления пути в заданную точку
   void calculate_path();
-
+  // Wavefront Algorithm 
+  void wave_search();
   double heruistic(int i, int j);
 
   // функции для работы с картами и индексами
