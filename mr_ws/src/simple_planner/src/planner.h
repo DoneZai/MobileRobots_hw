@@ -25,6 +25,7 @@ struct SearchNode{
    double g = std::numeric_limits<double>::max();
    // значение функции эвристики
    double h = 0;
+   int iParent, jParent;
 };
 
 struct MapIndex {

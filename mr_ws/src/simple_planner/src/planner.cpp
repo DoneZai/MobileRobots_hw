@@ -42,10 +42,10 @@ void Planner::on_target(const geometry_msgs::PoseStamped& pose)
 
   increase_obstacles(ceil(robot_radius_/map_.info.resolution));
   obstacle_map_publisher_.publish(obstacle_map_);
-  wave_search();
   cost_map_publisher_.publish(cost_map_);
+  // wave_search();
 
-  // calculate_path();
+  calculate_path();
 
   if (!path_msg_.points.empty()) {
     path_msg_.header.stamp = ros::Time::now();
@@ -135,6 +135,22 @@ void Planner::increase_obstacles(std::size_t cells)
     std::swap(wave, next_wave);
     ROS_INFO_STREAM("Wave size = " << wave.size());
   }
+//make cost map 
+    cost_map_.info = map_.info;
+    cost_map_.header = map_.header;
+    cost_map_.data.resize(map_.data.size());
+    cost_map_.data = map_.data;
+
+    for (int i = 0; i < cost_map_.info.width; ++i)
+    {
+      for (int j = 0; j < cost_map_.info.height; ++j){
+        if(map_value(obstacle_map_.data, i, j) == kObstacleValue){
+          map_value(cost_map_.data, i, j) = 100;}
+        else{
+          map_value(cost_map_.data, i, j) = 1;}
+        }
+    }
+    ROS_INFO_STREAM("Cost map finished" );
 }
 
 class CompareSearchNodes {
@@ -158,126 +174,114 @@ private:
 
 // 波搜索算法
 void Planner::wave_search(){
-    cost_map_.info = map_.info;
-    cost_map_.header = map_.header;
-    cost_map_.data.resize(map_.data.size());
-    cost_map_.data = map_.data;
-
+    MapIndex start_wave = point_index(start_pose_.position.x, start_pose_.position.y);
+    MapIndex target_index = point_index(target_pose_.position.x, target_pose_.position.y);
+    
     search_map_.resize(map_.data.size());
     std::fill(search_map_.begin(), search_map_.end(), SearchNode());
     path_msg_.points.clear();
-
-    MapIndex start_wave = point_index(start_pose_.position.x, start_pose_.position.y);
-
+    
+    std::queue<MapIndex> queue_wave;
     auto& start_obstacle_value = map_value(obstacle_map_.data, start_wave.i, start_wave.j);
     if (start_obstacle_value == kObstacleValue) {
-  	ROS_WARN_STREAM("Start is in obstacle!");
-  	return;
+      ROS_WARN_STREAM("Start is in obstacle!");
+      return;
     }
-    else{
-      map_value(cost_map_.data, start_wave.i, start_wave.j)=1;
-    }
+    
+    map_value(search_map_, start_wave.i, start_wave.j).g = 0;
+    map_value(search_map_, start_wave.i, start_wave.j).state = SearchNode::OPEN;
+    queue_wave.push(start_wave);
 
-    std::queue<MapIndex> plan_wave;
-    for (int i = 0; i < cost_map_.info.width; ++i)
-    {
-      for (int j = 0; j < cost_map_.info.height; ++j)
-      map_value(cost_map_.data, i, j) = 100;
-    }
+    ROS_INFO_STREAM("Begin to make search map");  
+    bool found = false;
+    while (!found && !queue_wave.empty()) {
+      std::queue<MapIndex> queue_nextwave;
 
-    plan_wave.push(start_wave);
-    while (!plan_wave.empty()) {
-        auto current_point = plan_wave.front();
-        plan_wave.pop();
-        
-        for (const auto& shift : neighbors) 
-        {
-            auto neighbor_index = current_point;
-            neighbor_index.i += shift.i;
-            neighbor_index.j += shift.j;
-            if (!indices_in_map(neighbor_index.i, neighbor_index.j)) 
-            {
-              continue;
-            }
-            if (map_value(cost_map_.data,neighbor_index.i,neighbor_index.j) == 100 && map_value(obstacle_map_.data,neighbor_index.i,neighbor_index.j) != kObstacleValue) 
-            { 
-              map_value(cost_map_.data,neighbor_index.i,neighbor_index.j)  =  1;
-              plan_wave.push(neighbor_index);
-            }
-        }
-      }
-    ROS_INFO_STREAM("Cost map finished" );
-
-    std::set<MapIndex, CompareSearchNodes> queue(CompareSearchNodes(*this));
-    SearchNode& start = map_value(search_map_, start_wave.i, start_wave.j);
-    start.g = 0;
-    start.state = SearchNode::OPEN;
-    queue.insert(start_wave);
-    ROS_INFO_STREAM("Beging to make search map");  
-
-    while (!queue.empty()) {
-        auto node_index_iter = queue.begin();
-        auto node_index = *node_index_iter;
-        auto& node = map_value(search_map_, node_index.i, node_index.j);
-        node.state = SearchNode::CLOSE;
-        queue.erase(node_index_iter);
+      while (!queue_wave.empty()) {
+        auto current_point = queue_wave.front();
+        map_value(search_map_, current_point.i, current_point.j).state = SearchNode::CLOSE;
+        queue_wave.pop();
 
         for (const auto& shift : neighbors) 
         {   
-            auto neighbor_index = node_index;
+            auto neighbor_index = current_point;
             neighbor_index.i += shift.i;
             neighbor_index.j += shift.j;
-           
+            // out of boundary?
             if (!indices_in_map(neighbor_index.i, neighbor_index.j)) 
             {
               continue;
             }
-            if (map_value(cost_map_.data,neighbor_index.i,neighbor_index.j) != 100 && 
-                map_value(obstacle_map_.data,neighbor_index.i,neighbor_index.j) != kObstacleValue) 
-            { 
-            SearchNode& neighbor = map_value(search_map_, neighbor_index.i, neighbor_index.j);
-              if(neighbor.state == SearchNode::UNDEFINED){
-              neighbor.g = node.g + map_value(cost_map_.data,neighbor_index.i,neighbor_index.j);
-              queue.insert(neighbor_index);
-              ROS_INFO_STREAM("Search map MAKING   " << neighbor.g);
+            //is obstacle?
+            if(map_value(obstacle_map_.data,neighbor_index.i,neighbor_index.j) == kObstacleValue)
+            {
+              map_value(search_map_, neighbor_index.i, neighbor_index.j).state = SearchNode::CLOSE;  
+              continue;
+            }
+            //calculate g_neighbor,possible be sqrt(2)
+            double g_neighbor;
+            if(shift.i*shift.j!=0){
+                g_neighbor = map_value(search_map_, current_point.i, current_point.j).g + 1.4; //斜着走
               }
-            }
-        }
-      }
-    ROS_INFO_STREAM("Search map finished" );
+            else{
+                g_neighbor = map_value(search_map_, current_point.i, current_point.j).g + 1;
+              }
+            auto& neighbor = map_value(search_map_, neighbor_index.i, neighbor_index.j);
 
-    // Поиск траектории
-    MapIndex current_index = point_index(target_pose_.position.x, target_pose_.position.y);
-    while (!(current_index.i == start_wave.i && current_index.j == start_wave.j)) {
-        ROS_INFO_STREAM("Begin to search" );
-        for (const auto& shift : neighbors) {
-            auto neighbor_index = current_index;
-            neighbor_index.i += shift.i;
-            neighbor_index.j += shift.j;
-            if (!indices_in_map(neighbor_index.i, neighbor_index.j)) 
-            {
-              ROS_INFO_STREAM("Out of boundary");
-              continue;
-            }
-            SearchNode& current = map_value(search_map_, current_index.i, current_index.j);
-            current.state = SearchNode::OPEN;
-            SearchNode& neighbor = map_value(search_map_, neighbor_index.i, neighbor_index.j);
-            neighbor.state = SearchNode::OPEN;
-            if(neighbor.g == current.g-map_value(cost_map_.data,neighbor_index.i,neighbor_index.j))
-            {
-              ROS_INFO_STREAM("Searching for the path... " );
-              geometry_msgs::Point32 p1;
-              p1.x = neighbor_index.i * map_.info.resolution + map_.info.origin.position.x;
-              p1.y = neighbor_index.j * map_.info.resolution + map_.info.origin.position.y;
-              path_msg_.points.push_back(p1); 
-              ROS_INFO_STREAM("x = "<<p1.x<<"y = "<<p1.y);
-              current_index = neighbor_index;
+            if( neighbor_index.i ==  target_index.i && neighbor_index.j == target_index.j ){
+              found = true;
+              neighbor.g = g_neighbor;
+              neighbor.state = SearchNode::CLOSE;
+              neighbor.iParent = current_point.i;
+              neighbor.jParent = current_point.j;
               break;
             }
-          }
+              if(neighbor.state == SearchNode::UNDEFINED){
+                neighbor.g = g_neighbor;
+                neighbor.iParent = current_point.i;
+                neighbor.jParent = current_point.j;
+                queue_wave.push(neighbor_index);
+              }
+              else{
+                if (g_neighbor < neighbor.g) {
+                    neighbor.g = g_neighbor;
+                    neighbor.iParent = current_point.i;
+                    neighbor.jParent = current_point.j;
+              }
+                continue;
+              }
+
+              neighbor.g = g_neighbor;
+              neighbor.state = SearchNode::OPEN;
+              neighbor.iParent = current_point.i;
+              neighbor.jParent = current_point.j;
+              queue_wave.push(neighbor_index);
         }
-    ROS_INFO_STREAM("Wave path has been searched " );
+      }
+    }
+  ROS_INFO_STREAM("Search map finished" );
+
+  if (found) {
+  	int i = target_index.i;
+  	int j = target_index.j;
+  	geometry_msgs::Point32 p;
+    p.x = i * map_.info.resolution + map_.info.origin.position.x;
+    p.y = j * map_.info.resolution + map_.info.origin.position.y;
+    path_msg_.points.push_back(p);
+  	while (i != start_wave.i || j != start_wave.j) {
+  		auto& node = map_value(search_map_, i, j);
+      i = node.iParent;
+      j = node.jParent;
+      p.x = i * map_.info.resolution + map_.info.origin.position.x;
+      p.y = j * map_.info.resolution + map_.info.origin.position.y;
+      path_msg_.points.push_back(p);
+  		ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
+  	}
+  }
+  ROS_INFO_STREAM("Wave path has been searched " );
+
 }
+
 //  启发式函数
 double Planner::heruistic(int i, int j) {
   MapIndex target_index = point_index(target_pose_.position.x, target_pose_.position.y);
@@ -295,6 +299,8 @@ void Planner::calculate_path()
   // Здесь необходимо продолжить код для поиска пути
   std::set<MapIndex, CompareSearchNodes> queue(CompareSearchNodes(*this));
   MapIndex start_index = point_index(start_pose_.position.x, start_pose_.position.y);
+  MapIndex target_index = point_index(target_pose_.position.x, target_pose_.position.y);
+
   SearchNode& start = map_value(search_map_, start_index.i, start_index.j);
   start.g = 0;
   start.h = heruistic(start_index.i, start_index.j);
@@ -307,36 +313,98 @@ void Planner::calculate_path()
   }
   queue.insert(start_index);
 
-  MapIndex target_index = point_index(target_pose_.position.x, target_pose_.position.y);
   bool found = false;
-  while (!queue.empty()) {
-  	auto node_index_iter = queue.begin();
-  	auto node_index = *node_index_iter;
-  	auto& node = map_value(search_map_, node_index.i, node_index.j);
-  	node.state = SearchNode::CLOSE;
-  	queue.erase(node_index_iter);
-
+  while (!found && !queue.empty()) {
   	// insert code here
-    
+    ROS_INFO_STREAM("Begin to make search map");  
+    while (!queue.empty()) {
+        auto node_index_iter = queue.begin();
+        auto current_point = *node_index_iter;
+        auto& node = map_value(search_map_, current_point.i, current_point.j);
+        node.state = SearchNode::CLOSE;
+        queue.erase(node_index_iter);
 
-  }
+        for (const auto& shift : neighbors) 
+        {   
+            auto neighbor_index = current_point;
+            neighbor_index.i += shift.i;
+            neighbor_index.j += shift.j;
+            // out of boundary?
+            if (!indices_in_map(neighbor_index.i, neighbor_index.j)) 
+            {
+              continue;
+            }
+            //is obstacle?
+            if(map_value(obstacle_map_.data,neighbor_index.i,neighbor_index.j) == kObstacleValue)
+            {
+              map_value(search_map_, neighbor_index.i, neighbor_index.j).state = SearchNode::CLOSE;  
+              continue;
+            }
+
+            //calculate g_neighbor,possible be sqrt(2)
+            double g_neighbor;
+            if(shift.i*shift.j!=0){
+                g_neighbor = map_value(search_map_, current_point.i, current_point.j).g + 1.4; //斜着走
+              }
+            else{
+                g_neighbor = map_value(search_map_, current_point.i, current_point.j).g + 1;
+              }
+            auto& neighbor = map_value(search_map_, neighbor_index.i, neighbor_index.j);
+
+            if( neighbor_index.i ==  target_index.i && neighbor_index.j == target_index.j ){
+              found = true;
+              neighbor.g = g_neighbor;
+              neighbor.h = heruistic(start_index.i, start_index.j);
+              neighbor.state = SearchNode::CLOSE;
+              neighbor.iParent = current_point.i;
+              neighbor.jParent = current_point.j;
+              break;
+            }
+              if(neighbor.state == SearchNode::UNDEFINED){
+                neighbor.g = g_neighbor;
+                neighbor.iParent = current_point.i;
+                neighbor.jParent = current_point.j;
+              }
+              else{
+                if (g_neighbor < neighbor.g) {
+                    neighbor.g = g_neighbor;
+                    neighbor.iParent = current_point.i;
+                    neighbor.jParent = current_point.j;
+              }
+                continue;
+              }
+
+              neighbor.g = g_neighbor;
+              neighbor.h = heruistic(start_index.i, start_index.j);
+              neighbor.state = SearchNode::OPEN;
+              neighbor.iParent = current_point.i;
+              neighbor.jParent = current_point.j;
+              queue.insert(neighbor_index);
+        }
+    }
+  ROS_INFO_STREAM("Search map finished" );
 
   // fill path message with points from path 
   if (found) {
   	int i = target_index.i;
   	int j = target_index.j;
   	geometry_msgs::Point32 p;
+    p.x = i * map_.info.resolution + map_.info.origin.position.x;
+    p.y = j * map_.info.resolution + map_.info.origin.position.y;
+    path_msg_.points.push_back(p);
   	while (i != start_index.i || j != start_index.j) {
-  		p.x = i * map_.info.resolution + map_.info.origin.position.x;
-  		p.y = j * map_.info.resolution + map_.info.origin.position.y;
   		auto& node = map_value(search_map_, i, j);
-  		path_msg_.points.push_back(p);
-  		ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
-  		double min_g = node.g;
-  		
+      i = node.iParent;
+      j = node.jParent;
+      p.x = i * map_.info.resolution + map_.info.origin.position.x;
+      p.y = j * map_.info.resolution + map_.info.origin.position.y;
+      path_msg_.points.push_back(p);
+  		// ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
   	}
   }
 
+    ROS_INFO_STREAM("A* path has been searched" );
+  }
 
 }
 
