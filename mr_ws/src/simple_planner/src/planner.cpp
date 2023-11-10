@@ -214,30 +214,33 @@ void Planner::wave_search(){
     start.state = SearchNode::OPEN;
     queue.insert(start_wave);
     ROS_INFO_STREAM("Beging to make search map");  
+
     while (!queue.empty()) {
         auto node_index_iter = queue.begin();
         auto node_index = *node_index_iter;
         auto& node = map_value(search_map_, node_index.i, node_index.j);
         node.state = SearchNode::CLOSE;
         queue.erase(node_index_iter);
-        int iii=1;
+
         for (const auto& shift : neighbors) 
         {   
             auto neighbor_index = node_index;
             neighbor_index.i += shift.i;
             neighbor_index.j += shift.j;
+           
             if (!indices_in_map(neighbor_index.i, neighbor_index.j)) 
             {
               continue;
             }
-            if (map_value(cost_map_.data,neighbor_index.i,neighbor_index.j) == 1 && map_value(obstacle_map_.data,neighbor_index.i,neighbor_index.j) != kObstacleValue) 
-            { iii+=1;
-              // ROS_INFO_STREAM("i = "<<static_cast<int>(neighbor_index.i)<<"j = "<<static_cast<int>(neighbor_index.j));
-              SearchNode& neighbor = map_value(search_map_, neighbor_index.i, neighbor_index.j);
-              neighbor.g = node.g+1;
-              ROS_INFO_STREAM("idk but skippppp"<<static_cast<int>(node.g));
+            if (map_value(cost_map_.data,neighbor_index.i,neighbor_index.j) != 100 && 
+                map_value(obstacle_map_.data,neighbor_index.i,neighbor_index.j) != kObstacleValue) 
+            { 
+            SearchNode& neighbor = map_value(search_map_, neighbor_index.i, neighbor_index.j);
+              if(neighbor.state == SearchNode::UNDEFINED){
+              neighbor.g = node.g + map_value(cost_map_.data,neighbor_index.i,neighbor_index.j);
               queue.insert(neighbor_index);
-              break;
+              ROS_INFO_STREAM("Search map MAKING   " << neighbor.g);
+              }
             }
         }
       }
@@ -260,7 +263,7 @@ void Planner::wave_search(){
             current.state = SearchNode::OPEN;
             SearchNode& neighbor = map_value(search_map_, neighbor_index.i, neighbor_index.j);
             neighbor.state = SearchNode::OPEN;
-            if(neighbor.g == current.g-1)
+            if(neighbor.g == current.g-map_value(cost_map_.data,neighbor_index.i,neighbor_index.j))
             {
               ROS_INFO_STREAM("Searching for the path... " );
               geometry_msgs::Point32 p1;
@@ -273,12 +276,12 @@ void Planner::wave_search(){
             }
           }
         }
-    ROS_INFO_STREAM("Path has been searched " );
+    ROS_INFO_STREAM("Wave path has been searched " );
 }
-
+//  启发式函数
 double Planner::heruistic(int i, int j) {
-  //这个地方来实现启发式函数
-  return 0;
+  MapIndex target_index = point_index(target_pose_.position.x, target_pose_.position.y);
+  return abs(i-target_index.i)+abs(j-target_index.j);
 }
 
 
@@ -314,6 +317,7 @@ void Planner::calculate_path()
   	queue.erase(node_index_iter);
 
   	// insert code here
+    
 
   }
 
