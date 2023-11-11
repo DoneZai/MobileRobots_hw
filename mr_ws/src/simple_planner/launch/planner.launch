@@ -20,9 +20,9 @@
    <node name="planner" pkg="simple_planner" type="simple_planner" output="screen">
    	<remap from="/planner/target_pose" to="/move_base_simple/goal"/>
       <remap from="/planner/ground_truth" to="/robot/base_pose_ground_truth"/>
-      <remap from="velocity" to="/robot/velocity"/>
-      <remap from="steering" to="/robot/steering"/>
-      <remap from="cmd_vel" to="/cmd_vel"/>
+      <!-- <remap from="velocity" to="/robot/velocity"/> -->
+      <!-- <remap from="steering" to="/robot/steering"/> -->
+      <!-- <remap from="cmd_vel" to="/cmd_vel"/> -->
    </node>
 
    <!-- <node name="vel_node" pkg="rostopic" type="rostopic" args="pub /robot/velocity std_msgs/Float32  2.0 -r1">

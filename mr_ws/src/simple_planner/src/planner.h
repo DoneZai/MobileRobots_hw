@@ -42,6 +42,10 @@ public:
 
 private:
   friend class CompareSearchNodes;
+  void publishTwist(const ros::TimerEvent& event);
+  void on_cmd(const geometry_msgs::TwistConstPtr &msg);
+  void on_steering(const std_msgs::Float32::ConstPtr& steering);
+  void on_velocity(const std_msgs::Float32::ConstPtr& velocity);
   // обновление положения робота
   void on_pose(const nav_msgs::Odometry& odom);
   // колбек целевой точки
@@ -57,7 +61,7 @@ private:
   int binomial(int n, int i) ;
   geometry_msgs::Point32  bezier_curve(const std::vector<geometry_msgs::Point32>& points, float t);
   void bezier_smooth(sensor_msgs::PointCloud before_smooth);
-  void movingonpath(const sensor_msgs::PointCloud& path, int i);
+  void movingonpath(const sensor_msgs::PointCloud& path);
   double heruistic(int i, int j);
 
   // функции для работы с картами и индексами
@@ -87,18 +91,21 @@ private:
   ros::Publisher obstacle_map_publisher_ = nh_.advertise<nav_msgs::OccupancyGrid>("obstacle_map", 1);
   ros::Publisher cost_map_publisher_ = nh_.advertise<nav_msgs::OccupancyGrid>("cost_map", 1);
   ros::Publisher path_publisher_ = nh_.advertise<sensor_msgs::PointCloud>("path", 1);
-  ros::Publisher vel_publisher_ = nh_.advertise<std_msgs::Float32>("/velocity", 1);
-  ros::Publisher ste_publisher_ = nh_.advertise<std_msgs::Float32>("/steering", 10);
+  ros::Publisher vel_publisher_ = nh_.advertise<std_msgs::Float32>("velocity", 1);
+  ros::Publisher ste_publisher_ = nh_.advertise<std_msgs::Float32>("steering", 10);
   ros::Publisher v_ste_publisher_ = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
 
   // ros::Publisher path_pub(nh.advertise<nav_msgs::Path>("/controller/simple_controller/path", 1));
-
+  // ros::Timer timer_ = nh_.createTimer(ros::Duration(0.01), &Planner::publishTwist, this);
+    
 
   ros::ServiceClient map_server_client_ =  nh_.serviceClient<nav_msgs::GetMap>("/static_map");
 
+  ros::Subscriber steering_sub_ = nh_.subscribe("steering", 1, &Planner::on_steering, this);
+  ros::Subscriber velocity_sub_ = nh_.subscribe("velocity", 1, &Planner::on_velocity, this);
+  ros::Subscriber cmd_sub_ = nh_.subscribe("/cmd_vel", 1, &Planner::on_cmd, this);
   ros::Subscriber pose_sub_ = nh_.subscribe("ground_truth", 1, &Planner::on_pose, this);
   ros::Subscriber target_sub_ = nh_.subscribe("target_pose", 1, &Planner::on_target, this);
-  // ros::Publisher vel_pub = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
   // ros::Subscriber path_sub = nh.subscribe("/path", 1, &Planner::movingonpath, this);
 
 
@@ -107,8 +114,10 @@ private:
 
   sensor_msgs::PointCloud path_msg_;
   sensor_msgs::PointCloud temp_path_msg_;
-
-  double robot_radius_ = nh_.param("robot_radius", 0.5);
+  double steering_value_; 
+  double velocity_value_; 
+  bool path_finished = false; 
+  double robot_radius_ = nh_.param("robot_radius", 0.55);
 
   // карта поиска
   std::vector<SearchNode> search_map_;

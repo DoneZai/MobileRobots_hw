@@ -29,12 +29,49 @@ Planner::Planner(ros::NodeHandle& nh) :
 void Planner::on_pose(const nav_msgs::Odometry& odom)
 {
   start_pose_ = odom.pose.pose;
-  if (!path_msg_.points.empty()) {
-  movingonpath(path_msg_,0);
+  if (path_finished) {
+  movingonpath(path_msg_);
   path_publisher_.publish(path_msg_);
   }
 
+
 }
+
+void Planner::on_cmd(const geometry_msgs::TwistConstPtr &msg)
+    {
+        // 打印接收到的消息
+        // 修改linear.x，这里可以根据需要进行更改
+        geometry_msgs::Twist modified_cmd_vel_;
+        modified_cmd_vel_ = *msg;
+        modified_cmd_vel_.linear.x = velocity_value_; // 例如，将linear.x更改为0.5
+        modified_cmd_vel_.angular.z = steering_value_; // 例如，将linear.x更改为0.5
+        // 发布修改后的消息
+        v_ste_publisher_.publish(modified_cmd_vel_);
+    }
+
+
+
+
+void Planner::on_steering(const std_msgs::Float32::ConstPtr& steering) {
+    steering_value_ = steering->data;
+    
+}
+
+void Planner::on_velocity(const std_msgs::Float32::ConstPtr& velocity)
+{
+    velocity_value_ = velocity->data;
+    
+}
+
+// 定时器回调函数，用于发布消息到 /cmd_vel
+void Planner::publishTwist(const ros::TimerEvent& event) {
+    geometry_msgs::Twist twist_msg;
+    twist_msg.linear.x = steering_value_;
+    twist_msg.angular.z = steering_value_;  // 使用最新的值
+    v_ste_publisher_.publish(twist_msg);
+    // return;
+}
+
 
 void Planner::on_target(const geometry_msgs::PoseStamped& pose)
 {
@@ -60,6 +97,7 @@ void Planner::on_target(const geometry_msgs::PoseStamped& pose)
     path_msg_.header.stamp = ros::Time::now();
     path_msg_.header.frame_id = pose.header.frame_id;
     path_publisher_.publish(path_msg_);
+    path_finished = true;
   } else {
   	ROS_WARN_STREAM("Path not found!");
   }
@@ -470,7 +508,7 @@ void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
     ROS_INFO_STREAM("Number of points: " << path_msg_.points.size());
     temp_path_msg_.points.clear();
     size_t group_size = 80; // 每组的点的数量
-    float step = 0.005   ;  // 步长
+    float step = 0.01   ;  // 步长
     // 获取 before_smooth 中的点数
     size_t total_points = vector_before_all.size();
 
@@ -490,68 +528,103 @@ void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
             for (float t = 0; t <= 1; t += step) {
               geometry_msgs::Point32 p = bezier_curve(vector_before, t);
               temp_path_msg_.points.push_back(p);
-        }
+            }
             vector_before.clear();
 
     }
     std::reverse(temp_path_msg_.points.begin(), temp_path_msg_.points.end());
     path_msg_ = temp_path_msg_;
+    path_msg_.points.erase(path_msg_.points.begin());
     // ROS_INFO_STREAM("points1.x=" << path_msg_.points[0].x);
     // ROS_INFO_STREAM("_end.x=" << path_msg_.points[path_msg_.points.size()-1].x);
 }
 
-void Planner::movingonpath(const sensor_msgs::PointCloud& path , int i) {
-    
-  // 获取机器人当前四元数
+void Planner::movingonpath(const sensor_msgs::PointCloud& path) {
+
   double roll,pitch,yaw;
-  // tf2::Quaternion tf_quaternion;
-  // tf_quaternion.setValue(start_pose_.orientation.x, start_pose_.orientation.y, start_pose_.orientation.z, start_pose_.orientation.w);
-  // tf2::Matrix3x3(tf_quaternion).getRPY(roll, pitch, yaw);
+  // tf2::Quaternion quat;
+  // quat.setValue(start_pose_.orientation.x, start_pose_.orientation.y, start_pose_.orientation.z, start_pose_.orientation.w);
+  // tf2::Matrix3x3(quat).getRPY(roll, pitch, yaw);
+  yaw = 2*atan2(start_pose_.orientation.z,start_pose_.orientation.w);
+  double ld = 2;
+  size_t ii=path.points.size()-1;
+  ROS_INFO_STREAM("path.points.size()-1=" << path.points.size()-1); 
+  double dis_target = sqrt(pow(start_pose_.position.x-path.points[path.points.size()-1].x,2)+pow(start_pose_.position.y-path.points[path.points.size()-1].y,2));
+  double distance = dis_target;
 
-      ROS_INFO_STREAM("path.points=" << path.points[i].x); 
-      double distance = sqrt(pow(start_pose_.position.x-path.points[i].x,2)+pow(start_pose_.position.y-path.points[i].x,2));
-      if(distance<0.01){
-        path_msg_.points.erase(path_msg_.points.begin());
-        return;
+  for(;distance>ld;){
+      distance = sqrt(pow(start_pose_.position.x-path.points[ii].x,2)+pow(start_pose_.position.y-path.points[ii].y,2));
+      if(dis_target<ld){
+        break;
       }
-      yaw = 2*atan2(start_pose_.orientation.z,start_pose_.orientation.w);
-      // ROS_INFO_STREAM("yaw=" << yaw);
-      double angle_to_target = atan2(path.points[i].y - start_pose_.position.y, path.points[i].x - start_pose_.position.x);
-      double angle_difference = yaw - angle_to_target ;
-      // 将夹角差限制在 [-pi, pi] 范围内
-      // while (angle_difference > M_PI) {
-      //     angle_difference -= 2.0 * M_PI;
-      // }
-      // while (angle_difference < -M_PI) {
-      //     angle_difference += 2.0 * M_PI;
-      // }
-      // ROS_INFO_STREAM("wwwwww =" << start_pose_.orientation.w);
-      ROS_INFO_STREAM("angle_difference=" << angle_difference);
-      // ROS_INFO_STREAM("i =" << i);
+      ii--;
+  }
+  ROS_INFO_STREAM("distance =" << distance);
+  ROS_INFO_STREAM("target=" << ii); 
+  // 获取目标路径点的位置
+  double target_x = path.points[ii].x;
+  double target_y = path.points[ii].y;
 
-      // std_msgs::Float32 cmd_v,cmd_steering;
-      geometry_msgs::Twist cmd_v_steering;
-      if(abs(angle_difference)>0.1){
-        cmd_v_steering.linear.x=0;
-        cmd_v_steering.angular.z=-0.3*angle_difference;
-        v_ste_publisher_.publish(cmd_v_steering);
-        ROS_INFO_STREAM("Steering...." );
-      }
-      else{
-        std_msgs::Float32 cmd_v;
-        cmd_v.data = 1;
-        vel_publisher_.publish(cmd_v);
-        cmd_v_steering.angular.z=0;
-        v_ste_publisher_.publish(cmd_v_steering);
-        ROS_INFO_STREAM("Moving...." );
-      }
+  // calculate distance and angle between target and position car
+  double dx = target_x - start_pose_.position.x;
+  double dy = target_y - start_pose_.position.y;
 
-      // ros::Duration(1.0).sleep();  // 暂停一秒钟，可以根据需要调整
-      // 若到达终点，则跳出循环或者发布速度为0的消息停止机器人
+  double dis_ld = std::sqrt(dx*dx + dy*dy);
+  double angle_to_target = std::atan2(dy, dx);
 
-      // cmd_v_steering.linear.x=0;
-      // cmd_v_steering.angular.z=0;
-      // v_ste_publisher_.publish(cmd_v_steering);
+
+  // calculat steering angle
+  double alpha = angle_to_target-yaw; 
+
+  ROS_INFO_STREAM("dis_target =" << dis_target);
+
+  // std_msgs::Float32 cmd_v,cmd_steering;
+  geometry_msgs::Twist cmd_v_steering;
+
+  // if((path.points[path.points.size()-1].x-start_pose_.position.x<0.5)&&(path.points[path.points.size()-1].y-start_pose_.position.y<0.5)){
+  if(dis_target<0.5){
+    std_msgs::Float32 cmd_v;
+    cmd_v.data = 0;
+    vel_publisher_.publish(cmd_v);
+    std_msgs::Float32 cmd_steering;
+    cmd_steering.data = 0;
+    ste_publisher_.publish(cmd_steering);
+    ROS_INFO_STREAM("Arrived!!!" );
+    path_msg_.points.clear();
+    path_finished = false;
+    return;
+  }
+  if(abs(alpha)<0.05||abs(alpha-3.14)<0.05||abs(alpha+3.14)<0.05){
+    std_msgs::Float32 cmd_v;
+    cmd_v.data = 2;
+    vel_publisher_.publish(cmd_v);
+    std_msgs::Float32 cmd_steering;
+    cmd_steering.data = 0;
+    ste_publisher_.publish(cmd_steering);
+    ROS_INFO_STREAM("Moving...." );
+    }
+  if(!(abs(alpha)<0.5||abs(alpha-3.14)<0.5||abs(alpha+3.14)<0.5)){
+    std_msgs::Float32 cmd_v;
+    cmd_v.data = 0;
+    vel_publisher_.publish(cmd_v);
+    std_msgs::Float32 cmd_steering;
+    cmd_steering.data =  0.3*alpha;
+    ste_publisher_.publish(cmd_steering);
+    ROS_INFO_STREAM("Steering...." );
+  }
+  else{
+    std_msgs::Float32 cmd_v;
+    cmd_v.data = 3;
+    vel_publisher_.publish(cmd_v);
+    std_msgs::Float32 cmd_steering;
+    cmd_steering.data = 0.3*alpha;
+    if(cmd_steering.data<0.02&&cmd_steering.data>0)
+    cmd_steering.data = 0.03;
+    if(cmd_steering.data>-0.02&&cmd_steering.data<0)
+    cmd_steering.data = -0.03;
+    ste_publisher_.publish(cmd_steering);
+    ROS_INFO_STREAM("Steering and moving...." );
+  }
 
 }
 
