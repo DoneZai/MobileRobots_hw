@@ -9,6 +9,7 @@
 #include <nav_msgs/GetMap.h>
 #include <sensor_msgs/PointCloud.h>
 #include <limits>
+#include <std_msgs/Float32.h>
 
 namespace simple_planner
 {
@@ -56,6 +57,7 @@ private:
   int binomial(int n, int i) ;
   geometry_msgs::Point32  bezier_curve(const std::vector<geometry_msgs::Point32>& points, float t);
   void bezier_smooth(sensor_msgs::PointCloud before_smooth);
+  void movingonpath(const sensor_msgs::PointCloud& path, int i);
   double heruistic(int i, int j);
 
   // функции для работы с картами и индексами
@@ -85,11 +87,20 @@ private:
   ros::Publisher obstacle_map_publisher_ = nh_.advertise<nav_msgs::OccupancyGrid>("obstacle_map", 1);
   ros::Publisher cost_map_publisher_ = nh_.advertise<nav_msgs::OccupancyGrid>("cost_map", 1);
   ros::Publisher path_publisher_ = nh_.advertise<sensor_msgs::PointCloud>("path", 1);
+  ros::Publisher vel_publisher_ = nh_.advertise<std_msgs::Float32>("/velocity", 1);
+  ros::Publisher ste_publisher_ = nh_.advertise<std_msgs::Float32>("/steering", 10);
+  ros::Publisher v_ste_publisher_ = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
+
+  // ros::Publisher path_pub(nh.advertise<nav_msgs::Path>("/controller/simple_controller/path", 1));
+
 
   ros::ServiceClient map_server_client_ =  nh_.serviceClient<nav_msgs::GetMap>("/static_map");
 
   ros::Subscriber pose_sub_ = nh_.subscribe("ground_truth", 1, &Planner::on_pose, this);
   ros::Subscriber target_sub_ = nh_.subscribe("target_pose", 1, &Planner::on_target, this);
+  // ros::Publisher vel_pub = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
+  // ros::Subscriber path_sub = nh.subscribe("/path", 1, &Planner::movingonpath, this);
+
 
   geometry_msgs::Pose start_pose_;
   geometry_msgs::Pose target_pose_;

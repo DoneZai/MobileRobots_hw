@@ -331,7 +331,7 @@ Controller::Controller(const std::string& ns):
 
   current_segment = trajectory.begin();
   const auto trajectory_path = create_path();
-  on_path(trajectory_path);
+  // on_path(trajectory_path);
 }
 
 

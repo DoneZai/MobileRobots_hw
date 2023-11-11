@@ -5,6 +5,9 @@
 #include <queue>
 #include <set>
 #include <utility>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <geometry_msgs/Twist.h>
 
 namespace simple_planner
 {
@@ -26,6 +29,11 @@ Planner::Planner(ros::NodeHandle& nh) :
 void Planner::on_pose(const nav_msgs::Odometry& odom)
 {
   start_pose_ = odom.pose.pose;
+  if (!path_msg_.points.empty()) {
+  movingonpath(path_msg_,0);
+  path_publisher_.publish(path_msg_);
+  }
+
 }
 
 void Planner::on_target(const geometry_msgs::PoseStamped& pose)
@@ -110,7 +118,7 @@ void Planner::increase_obstacles(std::size_t cells)
       }
     }
   }
-  ROS_INFO_STREAM("Start wave size = " << wave.size());
+  // ROS_INFO_STREAM("Start wave size = " << wave.size());
   for(std::size_t step = 0; step < cells; ++step)
   {
     std::queue<MapIndex> next_wave;
@@ -134,7 +142,7 @@ void Planner::increase_obstacles(std::size_t cells)
       }
     } // wave empty
     std::swap(wave, next_wave);
-    ROS_INFO_STREAM("Wave size = " << wave.size());
+    // ROS_INFO_STREAM("Wave size = " << wave.size());
   }
 //make cost map 
     cost_map_.info = map_.info;
@@ -276,7 +284,7 @@ void Planner::wave_search(){
       p.x = i * map_.info.resolution + map_.info.origin.position.x;
       p.y = j * map_.info.resolution + map_.info.origin.position.y;
       path_msg_.points.push_back(p);
-  		ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
+  		// ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
   	}
     // size_t num_points = path_msg_.points.size();
   }
@@ -418,49 +426,7 @@ int Planner::binomial(int n, int i) {
         res *= (n - j + 1) / static_cast<double>(j);
     }
     return res;
-}
-
-
-// int factorial(int n) {
-//     return (n == 0 || n == 1) ? 1 : n * factorial(n - 1);
-// }
-
-// int comb(int n, int k) {
-//     return factorial(n) / (factorial(k) * factorial(n - k));
-// }
-
-// std::pair<double, double> get_bezier_curve(const std::vector<std::pair<double, double>>& points) {
-//     int n = points.size() - 1;
-
-//     return [=](double t) {
-//         double x = 0.0;
-//         double y = 0.0;
-
-//         for (int i = 0; i <= n; ++i) {
-//             double coeff = comb(n, i) * std::pow(t, i) * std::pow(1 - t, n - i);
-//             x += coeff * points[i].first;
-//             y += coeff * points[i].second;
-//         }
-
-//         return std::make_pair(x, y);
-//     };
-// }
-
-
-// std::pair<std::vector<double>, std::vector<double>> evaluate_bezier(const std::vector<std::pair<double, double>>& points, int total) {
-//     auto bezier = get_bezier_curve(points);
-//     std::vector<double> new_x, new_y;
-
-//     for (int i = 0; i < total; ++i) {
-//         double t = static_cast<double>(i) / (total - 1);
-//         auto result = bezier(t);
-//         new_x.push_back(result.first);
-//         new_y.push_back(result.second);
-//     }
-
-//     return std::make_pair(new_x, new_y);
-// }
-
+};
 
 // 计算n次贝塞尔曲线上的点
 geometry_msgs::Point32 Planner::bezier_curve(const std::vector<geometry_msgs::Point32>& vector_before, float t) {
@@ -475,14 +441,36 @@ geometry_msgs::Point32 Planner::bezier_curve(const std::vector<geometry_msgs::Po
     return res;
 }
 
+bool arePointsCollinear(const geometry_msgs::Point32& p1, const geometry_msgs::Point32& p2, const geometry_msgs::Point32& p3) {
+    return std::fabs((p2.y - p1.y) * (p3.x - p2.x) - (p3.y - p2.y) * (p2.x - p1.x)) < 1e-3;
+}
+
+void removeCollinearPoints(std::vector<geometry_msgs::Point32>& points) {
+    if (points.size() < 3) {
+        return;  // 三点形成一条直线
+    }
+
+    std::vector<geometry_msgs::Point32> result;
+    result.push_back(points[0]);  // 保留第一个点
+    size_t m = 0;
+    for (size_t i = 1; i < points.size() - 1; ++i) {
+        if (!arePointsCollinear(points[m], points[i], points[i + 1])) {
+            result.push_back(points[i]);
+            m = i;
+        }
+    }
+
+    result.push_back(points.back());  // 保留最后一个点
+    points = result;
+};
+
 void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
     std::vector<geometry_msgs::Point32> vector_before_all;
     vector_before_all = before_smooth.points;
     ROS_INFO_STREAM("Number of points: " << path_msg_.points.size());
     temp_path_msg_.points.clear();
-    size_t group_size = 40; // 每组的点的数量
-    float step = 0.02;     // 步长
-    // float step = 1.0 / (group_size - 1);
+    size_t group_size = 80; // 每组的点的数量
+    float step = 0.005   ;  // 步长
     // 获取 before_smooth 中的点数
     size_t total_points = vector_before_all.size();
 
@@ -492,10 +480,12 @@ void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
         std::vector<geometry_msgs::Point32> vector_before;
         for (size_t i = start_index; i < std::min(start_index + group_size, total_points); ++i) {
             vector_before.push_back(vector_before_all[i]);
-            ROS_INFO_STREAM("i =  " << i);
+            // ROS_INFO_STREAM("i =  " << i);
             }
             // if(start_index!=0)start_index-=10;
-            ROS_INFO_STREAM("Number of points: " << vector_before.size());
+            // ROS_INFO_STREAM("Number of points: " << vector_before.size());
+            removeCollinearPoints(vector_before);
+            // ROS_INFO_STREAM("After deleting: " << vector_before.size());
             // 对当前组进行贝塞尔平滑
             for (float t = 0; t <= 1; t += step) {
               geometry_msgs::Point32 p = bezier_curve(vector_before, t);
@@ -504,24 +494,66 @@ void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
             vector_before.clear();
 
     }
-            path_msg_ = temp_path_msg_;
-            // ROS_INFO_STREAM("Number of points: " << temp_path_msg_.points.size() << "  step = " << step);
+    std::reverse(temp_path_msg_.points.begin(), temp_path_msg_.points.end());
+    path_msg_ = temp_path_msg_;
+    // ROS_INFO_STREAM("points1.x=" << path_msg_.points[0].x);
+    // ROS_INFO_STREAM("_end.x=" << path_msg_.points[path_msg_.points.size()-1].x);
 }
 
-// void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
-//     std::vector<geometry_msgs::Point32> vector_before;
+void Planner::movingonpath(const sensor_msgs::PointCloud& path , int i) {
+    
+  // 获取机器人当前四元数
+  double roll,pitch,yaw;
+  // tf2::Quaternion tf_quaternion;
+  // tf_quaternion.setValue(start_pose_.orientation.x, start_pose_.orientation.y, start_pose_.orientation.z, start_pose_.orientation.w);
+  // tf2::Matrix3x3(tf_quaternion).getRPY(roll, pitch, yaw);
 
-//     vector_before = before_smooth.points; // 贝塞尔曲线控制点，给定控制点的数量决定贝塞尔曲线的阶数  
-//     path_msg_.points.clear();
-//     // cout << "size:" << points.size() << endl;
-//     float step = 0.001; // 步长
-//     for (float t = 0; t <= 1; t += step) {
-//     // for (int t = 0; t <= vector_before.size(); t++) {
-//         geometry_msgs::Point32 p = bezier_curve(vector_before, t);
-//         path_msg_.points.push_back(p);
-//         ROS_INFO_STREAM("Number of points: "<<path_msg_.points.size()<<"  step = "<< step);
-//     }
-// }
+      ROS_INFO_STREAM("path.points=" << path.points[i].x); 
+      double distance = sqrt(pow(start_pose_.position.x-path.points[i].x,2)+pow(start_pose_.position.y-path.points[i].x,2));
+      if(distance<0.01){
+        path_msg_.points.erase(path_msg_.points.begin());
+        return;
+      }
+      yaw = 2*atan2(start_pose_.orientation.z,start_pose_.orientation.w);
+      // ROS_INFO_STREAM("yaw=" << yaw);
+      double angle_to_target = atan2(path.points[i].y - start_pose_.position.y, path.points[i].x - start_pose_.position.x);
+      double angle_difference = yaw - angle_to_target ;
+      // 将夹角差限制在 [-pi, pi] 范围内
+      // while (angle_difference > M_PI) {
+      //     angle_difference -= 2.0 * M_PI;
+      // }
+      // while (angle_difference < -M_PI) {
+      //     angle_difference += 2.0 * M_PI;
+      // }
+      // ROS_INFO_STREAM("wwwwww =" << start_pose_.orientation.w);
+      ROS_INFO_STREAM("angle_difference=" << angle_difference);
+      // ROS_INFO_STREAM("i =" << i);
+
+      // std_msgs::Float32 cmd_v,cmd_steering;
+      geometry_msgs::Twist cmd_v_steering;
+      if(abs(angle_difference)>0.1){
+        cmd_v_steering.linear.x=0;
+        cmd_v_steering.angular.z=-0.3*angle_difference;
+        v_ste_publisher_.publish(cmd_v_steering);
+        ROS_INFO_STREAM("Steering...." );
+      }
+      else{
+        std_msgs::Float32 cmd_v;
+        cmd_v.data = 1;
+        vel_publisher_.publish(cmd_v);
+        cmd_v_steering.angular.z=0;
+        v_ste_publisher_.publish(cmd_v_steering);
+        ROS_INFO_STREAM("Moving...." );
+      }
+
+      // ros::Duration(1.0).sleep();  // 暂停一秒钟，可以根据需要调整
+      // 若到达终点，则跳出循环或者发布速度为0的消息停止机器人
+
+      // cmd_v_steering.linear.x=0;
+      // cmd_v_steering.angular.z=0;
+      // v_ste_publisher_.publish(cmd_v_steering);
+
+}
 
 } /* namespace simple_planner */
 
