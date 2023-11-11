@@ -42,7 +42,6 @@ public:
 
 private:
   friend class CompareSearchNodes;
-  void publishTwist(const ros::TimerEvent& event);
   void on_cmd(const geometry_msgs::TwistConstPtr &msg);
   void on_steering(const std_msgs::Float32::ConstPtr& steering);
   void on_velocity(const std_msgs::Float32::ConstPtr& velocity);
@@ -96,7 +95,6 @@ private:
   ros::Publisher v_ste_publisher_ = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
 
   // ros::Publisher path_pub(nh.advertise<nav_msgs::Path>("/controller/simple_controller/path", 1));
-  // ros::Timer timer_ = nh_.createTimer(ros::Duration(0.01), &Planner::publishTwist, this);
     
 
   ros::ServiceClient map_server_client_ =  nh_.serviceClient<nav_msgs::GetMap>("/static_map");

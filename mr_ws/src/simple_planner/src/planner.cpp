@@ -31,26 +31,19 @@ void Planner::on_pose(const nav_msgs::Odometry& odom)
   start_pose_ = odom.pose.pose;
   if (path_finished) {
   movingonpath(path_msg_);
-  path_publisher_.publish(path_msg_);
+  // path_publisher_.publish(path_msg_);
   }
-
 
 }
 
 void Planner::on_cmd(const geometry_msgs::TwistConstPtr &msg)
     {
-        // 打印接收到的消息
-        // 修改linear.x，这里可以根据需要进行更改
         geometry_msgs::Twist modified_cmd_vel_;
         modified_cmd_vel_ = *msg;
-        modified_cmd_vel_.linear.x = velocity_value_; // 例如，将linear.x更改为0.5
-        modified_cmd_vel_.angular.z = steering_value_; // 例如，将linear.x更改为0.5
-        // 发布修改后的消息
+        modified_cmd_vel_.linear.x = velocity_value_; 
+        modified_cmd_vel_.angular.z = steering_value_; 
         v_ste_publisher_.publish(modified_cmd_vel_);
     }
-
-
-
 
 void Planner::on_steering(const std_msgs::Float32::ConstPtr& steering) {
     steering_value_ = steering->data;
@@ -62,16 +55,6 @@ void Planner::on_velocity(const std_msgs::Float32::ConstPtr& velocity)
     velocity_value_ = velocity->data;
     
 }
-
-// 定时器回调函数，用于发布消息到 /cmd_vel
-void Planner::publishTwist(const ros::TimerEvent& event) {
-    geometry_msgs::Twist twist_msg;
-    twist_msg.linear.x = steering_value_;
-    twist_msg.angular.z = steering_value_;  // 使用最新的值
-    v_ste_publisher_.publish(twist_msg);
-    // return;
-}
-
 
 void Planner::on_target(const geometry_msgs::PoseStamped& pose)
 {
@@ -268,7 +251,7 @@ void Planner::wave_search(){
             //calculate g_neighbor,possible be sqrt(2)
             double g_neighbor;
             if(shift.i*shift.j!=0){
-                g_neighbor = map_value(search_map_, current_point.i, current_point.j).g + 1.4; //斜着走
+                g_neighbor = map_value(search_map_, current_point.i, current_point.j).g + 2; //斜着走
               }
             else{
                 g_neighbor = map_value(search_map_, current_point.i, current_point.j).g + 1;
@@ -324,9 +307,9 @@ void Planner::wave_search(){
       path_msg_.points.push_back(p);
   		// ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
   	}
-    // size_t num_points = path_msg_.points.size();
+    std::reverse(path_msg_.points.begin(), path_msg_.points.end());
   }
-  ROS_INFO_STREAM("Wave path has been searched " );
+  ROS_INFO_STREAM("Wave path has been found " );
 
 }
 
@@ -335,6 +318,7 @@ double Planner::heruistic(int i, int j) {
   MapIndex target_index = point_index(target_pose_.position.x, target_pose_.position.y);
   return abs(i-target_index.i)+abs(j-target_index.j);
 }
+
 
 
 void Planner::calculate_path()
@@ -449,13 +433,15 @@ void Planner::calculate_path()
       path_msg_.points.push_back(p);
   		// ROS_INFO_STREAM("i = "<< i <<" j = " << j << " g = " << node.g);
   	}
-
+    std::reverse(path_msg_.points.begin(), path_msg_.points.end());
   }
     ROS_INFO_STREAM("Number of points: "<<path_msg_.points.size());
     ROS_INFO_STREAM("A* path has been searched" );
   }
 
 }
+
+
 
 // 计算组合数
 int Planner::binomial(int n, int i) {
@@ -532,7 +518,7 @@ void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
             vector_before.clear();
 
     }
-    std::reverse(temp_path_msg_.points.begin(), temp_path_msg_.points.end());
+    // std::reverse(temp_path_msg_.points.begin(), temp_path_msg_.points.end());
     path_msg_ = temp_path_msg_;
     path_msg_.points.erase(path_msg_.points.begin());
     // ROS_INFO_STREAM("points1.x=" << path_msg_.points[0].x);
@@ -540,6 +526,7 @@ void Planner::bezier_smooth(sensor_msgs::PointCloud before_smooth) {
 }
 
 void Planner::movingonpath(const sensor_msgs::PointCloud& path) {
+  
 
   double roll,pitch,yaw;
   // tf2::Quaternion quat;
