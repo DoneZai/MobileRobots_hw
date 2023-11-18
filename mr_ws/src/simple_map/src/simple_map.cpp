@@ -91,8 +91,11 @@ else return 50;
  * Функция, которая будет вызвана
  * при получении данных от лазерного дальномера
  */
+
+
 void laserCallback(const sensor_msgs::LaserScan& scan)
 {
+
     tf::StampedTransform scanTransform;
     const std::string& laser_frame = scan.header.frame_id;
     const ros::Time& laser_stamp = scan.header.stamp;
@@ -114,7 +117,8 @@ void laserCallback(const sensor_msgs::LaserScan& scan)
     ROS_INFO_STREAM("publish map "<<x<<" "<<y);
     // в клетку карты записываем значение 100
     map_msg.data[ y* map_width + x] = 0;
-int size_ranges = scan.ranges.size();
+    
+    int size_ranges = scan.ranges.size();
     ROS_INFO_STREAM("Publish map"<<size_ranges);
     float curr_angle = scan.angle_min;
     float delta_angle = scan.angle_increment;
@@ -122,8 +126,11 @@ int size_ranges = scan.ranges.size();
     while(curr_angle < scan.angle_max)
     {
         float range = scan.ranges[i];
+
+
         if(range>scan.range_min && range < scan.range_max )
-        {
+        {   
+            
             float h = scan.range_min;
             while(h<=range)
             {
@@ -133,16 +140,18 @@ int size_ranges = scan.ranges.size();
                 int h_x = (h_map.x() - map_msg.info.origin.position.x )/map_resolution;
                 float p = 0.5;
                 if (abs(range - h) < 0.1) {
-                    p = 1.0;
+                    p = 0.8;
                     }
                     else if (range - h > 0.1) {
-                    p = 0.0;
+                    p = 0.2;
                     }
-                    float log_prev = log2p(float(map_msg.data[ h_y* map_width +h_x])/100);
+                    float log_prev = log2p(float(map_msg.data[h_y* map_width +h_x])/100);
                     float log_free = log2p(0.5);
                     float log_inv = log2p(p);
                     float log_ti = log_inv + log_prev - log_free;
-                    map_msg.data[ h_y* map_width + h_x] = get_map(log_ti);
+
+                    map_msg.data[h_y* map_width + h_x] = get_map(log_ti);
+
                     h += 0.01;
                 }
             }
