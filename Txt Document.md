@@ -24,11 +24,11 @@ There are publisher and subscriber for these custom msgs and srv.
 
 To run the pub and sun, use
 
- $ ros2 run interface_test_example publisher
+	$ ros2 run interface_test_example publisher
 
- $ ros2 run interface_test_example subscriber
+	$ ros2 run interface_test_example subscriber
 
 To use the launch file, use 
 
- $ ros2 launch interface_test_example pub_sub_launch.py 
+	$ ros2 launch interface_test_example pub_sub_launch.py 
 
