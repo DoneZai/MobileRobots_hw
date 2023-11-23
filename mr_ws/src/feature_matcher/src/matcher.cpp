@@ -34,21 +34,44 @@ void Matcher::publish_features(const std_msgs::Header& header)
 }
 
 void Matcher::add_feature(const sensor_msgs::LaserScan& scan, std::size_t start, std::size_t finish) {
-  // добавляем только особенные  точки на которые попало более 2 лучей
+  // добавляем только особенные точки на которые попало более 2 лучей
   if (finish - start < 2) {
   	return;
   }
   ROS_INFO_STREAM("Add feature between " << start << " " << finish);
   // TODO Здесь должен быть код определения координаты центра круглого препятствия 
-  
+  //这里实现圆柱中心点坐标确定
+  size_t j = start;
+  float radiusCylinder = 0.55;
+  for(size_t i = start;i <= finish;++i){
+    if(scan.ranges[i]<scan.ranges[j]){
+      j = i;
+    }
+  }
+  float angel = scan.angle_min + j*scan.angle_increment;
+  float dis = scan.ranges[j] + radiusCylinder;
+  float x = dis*cos(angel);
+  float y = dis*sin(angel);
   // добавляем в вектор особенных точек
-  // new_features.push_back(Eigen::Vector2d(x, y)));
+  new_features.push_back(Eigen::Vector2d(x, y));
 }
 
 void Matcher::detect_features(const sensor_msgs::LaserScan& scan)
 {
   new_features.clear();
   // TODO Здесь должен быть код для пределения особенные точек скана
+  //这里应该确定start和finish索引位置
+  size_t start, finish;
+  for(size_t i = 0;i < scan.ranges.size();++i) {
+    if(scan.ranges[i] < scan.range_max){
+        start = i;
+      for(size_t j = start;scan.ranges[j] < scan.ranges[i]+1;++j){
+        finish = j;
+      }
+    add_feature(scan,start,finish);
+    i = finish+1;
+    }
+  }
   // В цикле по лучам ищем начальный и конечный индексы лучей, падающих на одно препятствие
   // и вызываем add_feature
 }
@@ -60,6 +83,9 @@ void Matcher::predict_features_poses() {
   // переводим точки скана в предсказанное положение
   predicted_features.resize(new_features.size());
   // TODO здесь должен быть код пересчета new_features в predicted_features с помощью interpolated_transform
+  for(size_t index = 0;index < predicted_features.size();++index){
+    predicted_features[index] = interpolated_transform * new_features[index];
+  }
 }
 
 void Matcher::find_feature_pairs() {
@@ -105,7 +131,7 @@ void Matcher::find_transform()
 	}
 	ROS_INFO_STREAM("pairs = " << pairs);
 	if (pairs < 2) {
-		ROS_ERROR_STREAM("Not enaugh feature pairs!!! ");
+		ROS_ERROR_STREAM("Not enough feature pairs!!! ");
 		return;
 	}
 	base_center /= pairs;
@@ -185,14 +211,19 @@ void Matcher::update_base_features()
 {
 	// обновляем особенные точки если их не было - для первого измерения
   if (base_features.empty()) {
-
-	feature_pair_indices.clear();
-	base_features = new_features;	
-  } else {
+  	feature_pair_indices.clear();
+	  base_features = new_features;	
+  } 
+  else {
   	// TODO здесь должен быть код обновления опорных особенных точек по определенным условиям
-  	;
+    if(incremental_transform.translation().norm()>15){
+    feature_pair_indices.clear();
+    base_features = new_features;	
+    }
+    // base_features = new_features;	
   }
   ROS_INFO_STREAM("Features");
+  ROS_INFO_STREAM("incremental_transform.translation().norm()"<<incremental_transform.translation().norm());
   for (const auto& feature : base_features) {
     ROS_INFO_STREAM(feature.transpose());
   }

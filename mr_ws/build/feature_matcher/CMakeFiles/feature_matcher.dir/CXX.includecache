@@ -6,12 +6,6 @@
 
 #IncludeRegexTransform: 
 
-/home/jinlong/local/workspace/mr_ws/src/feature_matcher/src/feature_matcher.cpp
-ros/ros.h
--
-matcher.h
-/home/jinlong/local/workspace/mr_ws/src/feature_matcher/src/matcher.h
-
 /home/jinlong/local/workspace/mr_ws/src/feature_matcher/src/matcher.cpp
 matcher.h
 /home/jinlong/local/workspace/mr_ws/src/feature_matcher/src/matcher.h
