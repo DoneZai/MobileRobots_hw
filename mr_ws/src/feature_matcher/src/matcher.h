@@ -43,7 +43,6 @@ private:
   const std::string map_frame = nh.param<std::string>("map_frame", "map");
   // features from base scan набор опорных особенных точек в СК карты
   std::vector<Eigen::Vector2d> base_features;
-  std::vector<Eigen::Vector2d> base_features_old;
   // features from new scan набор особенных точек из нового скана в СК лазерного дальномера
   std::vector<Eigen::Vector2d> new_features;
   // features from new scan transfromed to base scan according to interpolation
@@ -60,8 +59,6 @@ private:
   // transform from current scan to previous
   // инкрементальное преобразование за последний шаг в СК карты
   Eigen::Isometry2d incremental_transform = Eigen::Isometry2d::Identity();
-  Eigen::Isometry2d incremental_transform_old = Eigen::Isometry2d::Identity();
-  Eigen::Isometry2d transform_old = Eigen::Isometry2d::Identity();
 
   tf::TransformBroadcaster br;
   // отметка времени предыдущего скана
