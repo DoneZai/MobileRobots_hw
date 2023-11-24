@@ -216,14 +216,23 @@ void Matcher::update_base_features()
   } 
   else {
   	// TODO здесь должен быть код обновления опорных особенных точек по определенным условиям
-    if(incremental_transform.translation().norm()>15){
-    feature_pair_indices.clear();
-    base_features = new_features;	
+    size_t pairs = 0;
+    for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
+      if (feature_pair_indices[i] >= 0){
+        ++pairs;
+      }
     }
-    // base_features = new_features;	
+    ROS_INFO_STREAM("feature_pair_indices.size()"<<feature_pair_indices.size());
+    if (pairs < 2)
+    {   
+      ROS_INFO_STREAM("Update base features......");
+      base_features.resize(new_features.size());
+      for (size_t j = 0; j < new_features.size(); ++j) {
+        base_features[j] = transform * new_features[j];
+      }
+    }
   }
   ROS_INFO_STREAM("Features");
-  ROS_INFO_STREAM("incremental_transform.translation().norm()"<<incremental_transform.translation().norm());
   for (const auto& feature : base_features) {
     ROS_INFO_STREAM(feature.transpose());
   }
