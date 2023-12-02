@@ -15,17 +15,16 @@ void Slam::add_landmark(const sensor_msgs::LaserScan &scan, std::size_t start, s
   if (finish - start < 2) {
     return;
   }
-  // ROS_INFO_STREAM("Add landmark between " << start << " and " << finish);
+  ROS_INFO_STREAM("Add landmark between " << start << " and " << finish);
   // TODO Здесь должен быть код определения координаты центра круглого препятствия
-  size_t j = start;
 
+  size_t j = start;
   for (size_t i = start; i <= finish; ++i) {
     if (scan.ranges[i] < scan.ranges[j]) {
       j = i;
     }
   }
   double angle = scan.angle_min + j * scan.angle_increment;
-  // angle = angles::normalize_angle(angle);
   double dis = scan.ranges[j] + radiusCylinder;
   double x = dis * cos(angle);
   double y = dis * sin(angle);
@@ -42,15 +41,17 @@ void Slam::detect_landmarks(const sensor_msgs::LaserScan &scan)
   // TODO Здесь должен быть код для пределения особенные точек скана
   // ищем начальный и конечный индексы лучей, падающих на одно препятствие
   // и вызываем add_landmark
-  size_t start, finish;
-  for (size_t i = 0; i < scan.ranges.size(); ++i) {
-    if (scan.ranges[i] < scan.range_max) {
+
+  size_t start, finish = 0;
+  for (size_t i = 0; i <= scan.ranges.size() - 1; ++i) {
+    if (scan.ranges[i] < scan.range_max - radiusCylinder) {
       start = i;
-      for (size_t j = start; scan.ranges[j] < scan.ranges[i] + 1; ++j) {
-        finish = j;
-      }
+      finish = start + 1;
+      while (abs(scan.ranges[finish] - scan.ranges[finish + 1]) < radiusCylinder &&
+             finish < scan.ranges.size() - 1)
+        ++finish;
       add_landmark(scan, start, finish);
-      i = finish + 1;
+      i = finish;
     }
   }
 }
@@ -85,12 +86,9 @@ int Slam::add_landmark_to_state(std::size_t i)
   // TODO init landmark in state
   // Здесь должен быть код по инициализации части вектора состояния, соответствующей
   // маяку с индексом last_found_landmark_index
+
   Eigen::Isometry2d robot_to_map = Eigen::Translation2d(X.segment(0, 2)) * Eigen::Rotation2Dd(X(2));
   Eigen::Vector2d landmarks_map = robot_to_map * new_landmarks[i];
-  // ROS_INFO_STREAM(
-  //   "positions " << landmarks_map(0) << " " << landmarks_map(1) << " "
-  //                << z_landmarks[i](0) * cos(z_landmarks[i](1)) + X(0) << " "
-  //                << z_landmarks[i](1) * sin(z_landmarks[i](1)) + X(1));
   ROS_INFO_STREAM("landmarks_found_quantity " << landmarks_found_quantity);
   X(2 * landmarks_found_quantity + ROBOT_STATE_SIZE - 2) = landmarks_map(0);
   X(2 * landmarks_found_quantity + ROBOT_STATE_SIZE - 1) = landmarks_map(1);
@@ -132,7 +130,6 @@ int Slam::add_landmark_to_state(std::size_t i)
   P.block(N, 0, 2, N) = P_temp;
 
   P.block(0, N, N, 2) = P_temp.transpose();
-
   return landmarks_found_quantity;
 }
 
@@ -140,9 +137,6 @@ void Slam::correct(int index, const Eigen::Vector2d &landmark_measuriment, int i
 {
   // TODO
   // Здесь должен быть код для обновления состояния по измерению iого маяка
-  // Eigen::Isometry2d robot_to_map = Eigen::Translation2d(X.segment(0, 2)) *
-  // Eigen::Rotation2Dd(X(2)); Eigen::Vector2d landmarks_map = robot_to_map * landmark_measuriment;
-
   double delta_x = X(ROBOT_STATE_SIZE + 2 * index) - X(0);
   double delta_y = X(ROBOT_STATE_SIZE + 2 * index + 1) - X(1);
   double dis = sqrt(delta_x * delta_x + delta_y * delta_y);
@@ -188,7 +182,7 @@ void Slam::on_scan(const sensor_msgs::LaserScan &scan)
   for (std::size_t i = 0; i < new_landmarks.size(); ++i) {
     const auto landmark_index = associate_measuriment(new_landmarks[i]);
     if (landmark_index >= 0) {
-      // ROS_INFO_STREAM("Correcting......  " << landmark_index);
+      ROS_INFO_STREAM("Correcting......  " << landmark_index);
       correct(landmark_index, new_landmarks[i], i);
     } else {
       if (landmarks_found_quantity < NUMBER_LANDMARKS) {

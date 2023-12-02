@@ -66,7 +66,7 @@ void Matcher::detect_features(const sensor_msgs::LaserScan &scan)
   for (size_t i = 0; i < scan.ranges.size(); ++i) {
     if (scan.ranges[i] < scan.range_max) {
       start = i;
-      for (size_t j = start; scan.ranges[j] < scan.ranges[i] + 1; ++j) {
+      for (size_t j = start; scan.ranges[j] < scan.ranges[i]; ++j) {
         finish = j;
       }
       add_feature(scan, start, finish);
