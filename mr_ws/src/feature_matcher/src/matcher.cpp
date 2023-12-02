@@ -1,19 +1,19 @@
 #include "matcher.h"
 #include <tf/transform_datatypes.h>
 
-void Matcher::on_laser_scan(const sensor_msgs::LaserScan& scan)
+void Matcher::on_laser_scan(const sensor_msgs::LaserScan &scan)
 {
   ROS_INFO_STREAM("on laser scan");
-  detect_features(scan);  
+  detect_features(scan);
   publish_features(scan.header);
   predict_features_poses();
   find_feature_pairs();
   find_transform();
   update_base_features();
-  publish_transform(scan.header);  
+  publish_transform(scan.header);
 }
 
-void Matcher::publish_features(const std_msgs::Header& header)
+void Matcher::publish_features(const std_msgs::Header &header)
 {
   visualization_msgs::Marker marker;
   marker.header = header;
@@ -33,148 +33,152 @@ void Matcher::publish_features(const std_msgs::Header& header)
   feature_pub.publish(marker);
 }
 
-void Matcher::add_feature(const sensor_msgs::LaserScan& scan, std::size_t start, std::size_t finish) {
+void Matcher::add_feature(const sensor_msgs::LaserScan &scan, std::size_t start, std::size_t finish)
+{
   // добавляем только особенные точки на которые попало более 2 лучей
   if (finish - start < 2) {
-  	return;
+    return;
   }
   ROS_INFO_STREAM("Add feature between " << start << " " << finish);
-  // TODO Здесь должен быть код определения координаты центра круглого препятствия 
-  //这里实现圆柱中心点坐标确定
+  // TODO Здесь должен быть код определения координаты центра круглого препятствия
+  // 这里实现圆柱中心点坐标确定
   size_t j = start;
   float radiusCylinder = 0.55;
-  for(size_t i = start;i <= finish;++i){
-    if(scan.ranges[i]<scan.ranges[j]){
+  for (size_t i = start; i <= finish; ++i) {
+    if (scan.ranges[i] < scan.ranges[j]) {
       j = i;
     }
   }
-  float angel = scan.angle_min + j*scan.angle_increment;
+  float angel = scan.angle_min + j * scan.angle_increment;
   float dis = scan.ranges[j] + radiusCylinder;
-  float x = dis*cos(angel);
-  float y = dis*sin(angel);
+  float x = dis * cos(angel);
+  float y = dis * sin(angel);
   // добавляем в вектор особенных точек
   new_features.push_back(Eigen::Vector2d(x, y));
 }
 
-void Matcher::detect_features(const sensor_msgs::LaserScan& scan)
+void Matcher::detect_features(const sensor_msgs::LaserScan &scan)
 {
   new_features.clear();
   // TODO Здесь должен быть код для пределения особенные точек скана
-  //这里应该确定start和finish索引位置
+  // 这里应该确定start和finish索引位置
   size_t start, finish;
-  for(size_t i = 0;i < scan.ranges.size();++i) {
-    if(scan.ranges[i] < scan.range_max){
-        start = i;
-      for(size_t j = start;scan.ranges[j] < scan.ranges[i]+1;++j){
+  for (size_t i = 0; i < scan.ranges.size(); ++i) {
+    if (scan.ranges[i] < scan.range_max) {
+      start = i;
+      for (size_t j = start; scan.ranges[j] < scan.ranges[i] + 1; ++j) {
         finish = j;
       }
-    add_feature(scan,start,finish);
-    i = finish+1;
+      add_feature(scan, start, finish);
+      i = finish + 1;
     }
   }
   // В цикле по лучам ищем начальный и конечный индексы лучей, падающих на одно препятствие
   // и вызываем add_feature
 }
 
-void Matcher::predict_features_poses() {
+void Matcher::predict_features_poses()
+{
   // считаем, что робот продолжит двигаться так же как на предыдущем шаге,
   // тогда положение скана будет определяться следующим трансформом
   const Eigen::Isometry2d interpolated_transform = incremental_transform * transform;
   // переводим точки скана в предсказанное положение
   predicted_features.resize(new_features.size());
-  // TODO здесь должен быть код пересчета new_features в predicted_features с помощью interpolated_transform
-  for(size_t index = 0;index < predicted_features.size();++index){
+  // TODO здесь должен быть код пересчета new_features в predicted_features с помощью
+  // interpolated_transform
+  for (size_t index = 0; index < predicted_features.size(); ++index) {
     predicted_features[index] = interpolated_transform * new_features[index];
   }
 }
 
-void Matcher::find_feature_pairs() {
+void Matcher::find_feature_pairs()
+{
   feature_pair_indices.clear();
   // для каждой точки базовой ищем ближайшую новую из предсказанных
   for (std::size_t base_index = 0; base_index < base_features.size(); ++base_index) {
-  	std::size_t nearest_index = 0;
-  	double nearest_distance = 1000000;
+    std::size_t nearest_index = 0;
+    double nearest_distance = 1000000;
 
-  	for (std::size_t new_index = 0; new_index < predicted_features.size(); ++new_index) {
-  	  const double distance = (base_features[base_index] - predicted_features[new_index]).norm();
-  	  if (distance < nearest_distance) {
-  	  	nearest_index = new_index;
-  	  	nearest_distance = distance;
-  	  }
-  	}
-  	// ROS_INFO_STREAM("base_index " << base_index << " nearest " << nearest_index << " d = " << nearest_distance);
-  	// простой фильтр по расстоянию 
-  	if (nearest_distance < 3.0) {
-  	  // добавляем индекс пары
+    for (std::size_t new_index = 0; new_index < predicted_features.size(); ++new_index) {
+      const double distance = (base_features[base_index] - predicted_features[new_index]).norm();
+      if (distance < nearest_distance) {
+        nearest_index = new_index;
+        nearest_distance = distance;
+      }
+    }
+    // ROS_INFO_STREAM("base_index " << base_index << " nearest " << nearest_index << " d = " <<
+    // nearest_distance); простой фильтр по расстоянию
+    if (nearest_distance < 3.0) {
+      // добавляем индекс пары
       feature_pair_indices.push_back(nearest_index);
-  	} else {
-  	  //  пары нет	
-  	  feature_pair_indices.push_back(-1);
-  	}
-
+    } else {
+      //  пары нет
+      feature_pair_indices.push_back(-1);
+    }
   }
 }
 
 void Matcher::find_transform()
 {
-	Eigen::Matrix2d W = Eigen::Matrix2d::Zero();
-	Eigen::Vector2d base_center = Eigen::Vector2d::Zero();
-	Eigen::Vector2d new_center = Eigen::Vector2d::Zero();
-	std::size_t pairs = 0;
-	// определяем количество пар и вычисляем геом. центр
-	for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
-	  if (feature_pair_indices[i] >= 0){
-	  	++pairs;
-	  	base_center += base_features[i];
-	  	new_center += predicted_features[feature_pair_indices[i]];
-	  }       
-	}
-	ROS_INFO_STREAM("pairs = " << pairs);
-	if (pairs < 2) {
-		ROS_ERROR_STREAM("Not enough feature pairs!!! ");
-		return;
-	}
-	base_center /= pairs;
-	new_center /= pairs;
-	// вычисляем матрицу W
-	for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
-	  if (feature_pair_indices[i] >= 0){
-	  	W += (predicted_features[feature_pair_indices[i]] - new_center) * (base_features[i] - base_center).transpose();
-	  }       
-	}
-	// вычисление угла из svd разложения сводится к
-	float angle = atan2 ((W (0, 1) - W (1, 0)), (W(0, 0) + W (1, 1)));
-	Eigen::Matrix2d R;
-	R (0, 0) = R (1, 1) = cos (angle);
-  	R (0, 1) = -sin (angle);
-  	R (1, 0) = sin (angle);
-	Eigen::Vector2d t = base_center - R * new_center;
-	Eigen::Isometry2d result = Eigen::Translation2d(t) * Eigen::Isometry2d(R);
+  Eigen::Matrix2d W = Eigen::Matrix2d::Zero();
+  Eigen::Vector2d base_center = Eigen::Vector2d::Zero();
+  Eigen::Vector2d new_center = Eigen::Vector2d::Zero();
+  std::size_t pairs = 0;
+  // определяем количество пар и вычисляем геом. центр
+  for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
+    if (feature_pair_indices[i] >= 0) {
+      ++pairs;
+      base_center += base_features[i];
+      new_center += predicted_features[feature_pair_indices[i]];
+    }
+  }
+  ROS_INFO_STREAM("pairs = " << pairs);
+  if (pairs < 2) {
+    ROS_ERROR_STREAM("Not enough feature pairs!!! ");
+    return;
+  }
+  base_center /= pairs;
+  new_center /= pairs;
+  // вычисляем матрицу W
+  for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
+    if (feature_pair_indices[i] >= 0) {
+      W += (predicted_features[feature_pair_indices[i]] - new_center) *
+           (base_features[i] - base_center).transpose();
+    }
+  }
+  // вычисление угла из svd разложения сводится к
+  float angle = atan2((W(0, 1) - W(1, 0)), (W(0, 0) + W(1, 1)));
+  Eigen::Matrix2d R;
+  R(0, 0) = R(1, 1) = cos(angle);
+  R(0, 1) = -sin(angle);
+  R(1, 0) = sin(angle);
+  Eigen::Vector2d t = base_center - R * new_center;
+  Eigen::Isometry2d result = Eigen::Translation2d(t) * Eigen::Isometry2d(R);
 
-	// обновляем трансформы
-	incremental_transform = result * incremental_transform;
-	transform = incremental_transform * transform;
-	// вычисляем среднюю ошибку
-	double err = 0;
-	for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
-	  if (feature_pair_indices[i] >= 0) {
-	  	err += (base_features[i] - transform * new_features[feature_pair_indices[i]]).norm();
-	  }       
-	}
-	ROS_INFO_STREAM("Mean error = " << err/pairs);
-	ROS_INFO_STREAM("Incremental transform " << std::endl << incremental_transform.matrix());
-	ROS_INFO_STREAM("Transform to initial pose " << std::endl << transform.matrix());
+  // обновляем трансформы
+  incremental_transform = result * incremental_transform;
+  transform = incremental_transform * transform;
+  // вычисляем среднюю ошибку
+  double err = 0;
+  for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
+    if (feature_pair_indices[i] >= 0) {
+      err += (base_features[i] - transform * new_features[feature_pair_indices[i]]).norm();
+    }
+  }
+  ROS_INFO_STREAM("Mean error = " << err / pairs);
+  ROS_INFO_STREAM("Incremental transform " << std::endl << incremental_transform.matrix());
+  ROS_INFO_STREAM("Transform to initial pose " << std::endl << transform.matrix());
 }
 
-void Matcher::publish_transform(const std_msgs::Header& header)
+void Matcher::publish_transform(const std_msgs::Header &header)
 {
-	// публикуем одометрию
+  // публикуем одометрию
   nav_msgs::Odometry odo;
   odo.header.stamp = header.stamp;
   odo.header.frame_id = map_frame;
   odo.child_frame_id = header.frame_id;
 
-  const auto& matrix = transform.matrix();
+  const auto &matrix = transform.matrix();
 
   double yaw = atan2(matrix(1, 0), matrix(0, 0));
   tf::Quaternion q;
@@ -183,7 +187,7 @@ void Matcher::publish_transform(const std_msgs::Header& header)
   odo.pose.pose.position.x = transform.translation().x();
   odo.pose.pose.position.y = transform.translation().y();
   // вычисляем скорости
-  const auto& inc_matrix = incremental_transform.matrix();
+  const auto &inc_matrix = incremental_transform.matrix();
   double dt = (header.stamp - last_stamp).toSec();
   last_stamp = header.stamp;
   double omega = atan2(matrix(1, 0), matrix(0, 0)) / dt;
@@ -191,16 +195,15 @@ void Matcher::publish_transform(const std_msgs::Header& header)
   odo.twist.twist.linear.x = incremental_transform.translation().x() / dt;
   odo.twist.twist.linear.y = incremental_transform.translation().y() / dt;
   odo_pub.publish(odo);
-  
-  // публикуем трансформ от скана до карты, 
+
+  // публикуем трансформ от скана до карты,
   // не наоборот, так как дерево tf - однонаправленное и в нем уже есть основание - система odom
   tf::Transform tf_transform;
   Eigen::Isometry2d inverted_transform = transform.inverse();
-  tf_transform.setOrigin( tf::Vector3(inverted_transform.translation().x(), 
-  									  inverted_transform.translation().y(), 
-  									  0.0) );
+  tf_transform.setOrigin(
+    tf::Vector3(inverted_transform.translation().x(), inverted_transform.translation().y(), 0.0));
   tf::Quaternion inv_q;
-  const auto& inv_matrix = inverted_transform.matrix();
+  const auto &inv_matrix = inverted_transform.matrix();
   double inv_yaw = atan2(inv_matrix(1, 0), inv_matrix(0, 0));
   inv_q.setRPY(0, 0, inv_yaw);
   tf_transform.setRotation(inv_q);
@@ -209,22 +212,20 @@ void Matcher::publish_transform(const std_msgs::Header& header)
 
 void Matcher::update_base_features()
 {
-	// обновляем особенные точки если их не было - для первого измерения
+  // обновляем особенные точки если их не было - для первого измерения
   if (base_features.empty()) {
-  	feature_pair_indices.clear();
-	  base_features = new_features;	
-  } 
-  else {
-  	// TODO здесь должен быть код обновления опорных особенных точек по определенным условиям
+    feature_pair_indices.clear();
+    base_features = new_features;
+  } else {
+    // TODO здесь должен быть код обновления опорных особенных точек по определенным условиям
     size_t pairs = 0;
     for (std::size_t i = 0; i < feature_pair_indices.size(); ++i) {
-      if (feature_pair_indices[i] >= 0){
+      if (feature_pair_indices[i] >= 0) {
         ++pairs;
       }
     }
-    ROS_INFO_STREAM("feature_pair_indices.size()"<<feature_pair_indices.size());
-    if (pairs < 2)
-    {   
+    ROS_INFO_STREAM("feature_pair_indices.size()" << feature_pair_indices.size());
+    if (pairs < 2) {
       ROS_INFO_STREAM("Update base features......");
       base_features.resize(new_features.size());
       for (size_t j = 0; j < new_features.size(); ++j) {
@@ -233,7 +234,7 @@ void Matcher::update_base_features()
     }
   }
   ROS_INFO_STREAM("Features");
-  for (const auto& feature : base_features) {
+  for (const auto &feature : base_features) {
     ROS_INFO_STREAM(feature.transpose());
   }
 }

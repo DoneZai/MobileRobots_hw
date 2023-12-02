@@ -21,13 +21,13 @@ double dcc_time = acc_time;
 ros::Time start_test_time;
 bool started = false;
 
-void on_odo(const nav_msgs::Odometry& odom)
+void on_odo(const nav_msgs::Odometry &odom)
 {
   double current_velocity = odom.twist.twist.linear.x;
-
 }
 
-void on_timer(const ros::TimerEvent& event) {
+void on_timer(const ros::TimerEvent &event)
+{
   const auto t = ros::Time::now();
   if (!started) {
     start_test_time = t;
@@ -50,12 +50,13 @@ void on_timer(const ros::TimerEvent& event) {
       }
     }
   }
-  ROS_INFO_STREAM_COND(desired_velocity > 0.01, "test_time = " << test_time << " test vel = " << desired_velocity);
+  ROS_INFO_STREAM_COND(
+    desired_velocity > 0.01, "test_time = " << test_time << " test vel = " << desired_velocity);
   vcmd.data = desired_velocity;
   test_pub.publish(vcmd);
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ros::init(argc, argv, "velocity_test");
   ros::NodeHandle nh("~");
@@ -72,18 +73,18 @@ int main(int argc, char* argv[])
     acc_time = max_velocity / acc;
     dcc_time = max_test_time - acc_time;
   }
-  
+
   auto odo_sub = nh.subscribe("odom", 1, on_odo);
   test_pub = nh.advertise<std_msgs::Float32>("velocity", 1);
 
   if (nh.param("/use_sim_time", false)) {
-    while(ros::ok()) {
+    while (ros::ok()) {
       ros::spinOnce();
-    
+
       start_test_time = ros::Time::now();
       if (!start_test_time.isZero()) {
         break;
-      } 
+      }
     }
   }
   auto timer = nh.createTimer(ros::Duration(0.1), on_timer);
@@ -91,5 +92,3 @@ int main(int argc, char* argv[])
   ros::spin();
   return 0;
 }
-
-

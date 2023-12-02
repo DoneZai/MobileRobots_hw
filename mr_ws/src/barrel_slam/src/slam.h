@@ -10,8 +10,10 @@
 const std::size_t ROBOT_STATE_SIZE = 3;
 const std::size_t NUMBER_LANDMARKS = 12;
 const double HUGE_COVARIANCE = 1e10;
+const double radiusCylinder = 0.55;
 
-class Slam {
+class Slam
+{
 private:
   ros::NodeHandle nh;
   ros::Subscriber odo_sub;
@@ -20,26 +22,30 @@ private:
   ros::Publisher pose_pub;
   // публикатор положений маяков
   ros::Publisher landmark_pub[NUMBER_LANDMARKS];
-  void on_odo(const nav_msgs::Odometry& odom);
-  void on_scan(const sensor_msgs::LaserScan& scan);
-  void publish_results(const std::string& frame, const ros::Time& time);
+  void on_odo(const nav_msgs::Odometry &odom);
+  void on_scan(const sensor_msgs::LaserScan &scan);
+  void publish_results(const std::string &frame, const ros::Time &time);
   void predict(double dt);
   void advertize_landmark_publishers();
   // поиск координад маяков по скану
-  void detect_landmarks(const sensor_msgs::LaserScan& scan);
-  void add_landmark(const sensor_msgs::LaserScan& scan, std::size_t start, std::size_t finish);
+  void detect_landmarks(const sensor_msgs::LaserScan &scan);
+  void add_landmark(const sensor_msgs::LaserScan &scan, std::size_t start, std::size_t finish);
   // поиск индекса маяка в векторе состояния подходящего для измерения, -1 - новый маяк
-  int associate_measuriment(const Eigen::Vector2d& landmark_measuriment);
-  int add_landmark_to_state(const Eigen::Vector2d& landmark_measuriment);
-  void correct(int index, const Eigen::Vector2d& landmark_measuriment);
+  int associate_measuriment(const Eigen::Vector2d &landmark_measuriment);
+  // int add_landmark_to_state(const Eigen::Vector2d &landmark_measuriment);
+  int add_landmark_to_state(std::size_t i);
+  void correct(int index, const Eigen::Vector2d &landmark_measuriment, int i);
   // публикуем результаты
-  void publish_transform(const std_msgs::Header& scan_header);
+  void publish_transform(const std_msgs::Header &scan_header);
   double v = 0;
   double w = 0;
 
   // state vector
+
   // вектор состояния
   Eigen::VectorXd X;
+  // вектор наблюдения
+  Eigen::Vector2d Z;
   // system Jacobi
   // линеаризованная матрица системы
   Eigen::Matrix3d A;
@@ -52,12 +58,19 @@ private:
   // covariation of system vulnerability for x y fi
   // матрица ковариации возмущений системы
   Eigen::Matrix3d R;
+  // Observation matrix
+  // матрица наблюдений
+  Eigen::MatrixXd H;
+  // Kalman gain matrix
+  // Матрица усиления Калмана
+  Eigen::MatrixXd K;
 
   ros::Time last_time = ros::Time::now();
 
   std::size_t landmarks_found_quantity = 0;
 
   std::vector<Eigen::Vector2d> new_landmarks;
+  std::vector<Eigen::Vector2d> z_landmarks;
 
   tf::TransformBroadcaster br;
 
